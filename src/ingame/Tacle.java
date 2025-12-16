@@ -2,24 +2,77 @@ package ingame;
 
 import java.awt.Image;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
+// Lombok ì œê±°: ìˆ˜ë™ getter/setter ì œê³µ
 public class Tacle {
-	
-	private Image image; // Àå¾Ö¹° ÀÌ¹ÌÁö
-	
-	// Àå¾Ö¹°ÀÇ ÁÂÇ¥¿Í ³ĞÀÌ ³ôÀÌ
+
+	private Image image; // ì¥ì• ë¬¼ ì´ë¯¸ì§€
+
+	// ì¥ì• ë¬¼ì˜ ì¢Œí‘œì™€ ë„“ì´ ë†’ì´
 	private int x;
 	private int y;
 	private int width;
 	private int height;
-	
-	// Àå¾Ö¹° »óÅÂ
-	private int state;
-}
 
+	// ì¥ì• ë¬¼ ìƒíƒœ
+	private int state;
+
+	public Tacle() {
+	}
+
+	public Tacle(Image image, int x, int y, int width, int height, int state) {
+		this.image = image;
+		this.x = x;
+		this.y = y;
+		this.width = width;
+		this.height = height;
+		this.state = state;
+	}
+
+	public Image getImage() {
+		return image;
+	}
+
+	public void setImage(Image image) {
+		this.image = image;
+	}
+
+	public int getX() {
+		return x;
+	}
+
+	public void setX(int x) {
+		this.x = x;
+	}
+
+	public int getY() {
+		return y;
+	}
+
+	public void setY(int y) {
+		this.y = y;
+	}
+
+	public int getWidth() {
+		return width;
+	}
+
+	public void setWidth(int width) {
+		this.width = width;
+	}
+
+	public int getHeight() {
+		return height;
+	}
+
+	public void setHeight(int height) {
+		this.height = height;
+	}
+
+	public int getState() {
+		return state;
+	}
+
+	public void setState(int state) {
+		this.state = state;
+	}
+}

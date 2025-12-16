@@ -2,39 +2,139 @@ package ingame;
 
 import java.awt.Image;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
+// Lombok ì œê±°: ìˆ˜ë™ getter/setter ì œê³µ
 public class Cookie {
-	
-	private Image image; // ÄíÅ° ÀÌ¹ÌÁö
-	
-	// ÄíÅ°ÀÇ ÁÂÇ¥¿Í ³ĞÀÌ ³ôÀÌ
+
+	private Image image; // ì¿ í‚¤ ì´ë¯¸ì§€
+
+	// ì¿ í‚¤ì˜ ì¢Œí‘œì™€ ë„“ì´ ë†’ì´
 	private int x = 160;
 	private int y = 0;
 	private int width = 80;
 	private int height = 120;
-	
-	// ÄíÅ°ÀÇ Åõ¸íµµ (0ÀÌ Åõ¸í, 255°¡ ¿ÏÀü ºÒÅõ¸í)
+
+	// ì¿ í‚¤ì˜ íˆ¬ëª…ë„ (0ì´ íˆ¬ëª…, 255ê°€ ì™„ì „ ë¶ˆíˆ¬ëª…)
 	private int alpha = 255;
-	
-	// ÄíÅ°ÀÇ Ã¼·Â
+
+	// ì¿ í‚¤ì˜ ì²´ë ¥
 	private int health = 1000;
-	
-	// ÄíÅ°ÀÇ »óÅÂ (°Å´ëÈ­¿Í °¡¼ÓÈ­ ¹Ì±¸Çö)
-	private int big = 0; // °Å´ëÈ­ ³²Àº ½Ã°£
-	private int fast = 0; // °¡¼ÓÈ­ ³²Àº ½Ã°£
-	private int countJump = 0; // Á¡ÇÁ È½¼ö
-	private boolean invincible = false; // ¹«Àû ¿©ºÎ
-	private boolean fall = false; // ³«ÇÏ ¿©ºÎ
-	private boolean jump = false; // Á¡ÇÁ ¿©ºÎ
-	
-	public Cookie(Image image){ // ÀÌ¹ÌÁö¸¸ ³Ö¾îÁÖÀÚ
+
+	// ì¿ í‚¤ì˜ ìƒíƒœ (ê±°ëŒ€í™”ì™€ ê°€ì†í™” ë¯¸êµ¬í˜„)
+	private int big = 0; // ê±°ëŒ€í™” ë‚¨ì€ ì‹œê°„
+	private int fast = 0; // ê°€ì†í™” ë‚¨ì€ ì‹œê°„
+	private int countJump = 0; // ì í”„ íšŸìˆ˜
+	private boolean invincible = false; // ë¬´ì  ì—¬ë¶€
+	private boolean fall = false; // ë‚™í•˜ ì—¬ë¶€
+	private boolean jump = false; // ì í”„ ì—¬ë¶€
+
+	public Cookie() {
+	}
+
+	public Cookie(Image image) {
 		this.image = image;
 	}
-}
 
+	public Image getImage() {
+		return image;
+	}
+
+	public void setImage(Image image) {
+		this.image = image;
+	}
+
+	public int getX() {
+		return x;
+	}
+
+	public void setX(int x) {
+		this.x = x;
+	}
+
+	public int getY() {
+		return y;
+	}
+
+	public void setY(int y) {
+		this.y = y;
+	}
+
+	public int getWidth() {
+		return width;
+	}
+
+	public void setWidth(int width) {
+		this.width = width;
+	}
+
+	public int getHeight() {
+		return height;
+	}
+
+	public void setHeight(int height) {
+		this.height = height;
+	}
+
+	public int getAlpha() {
+		return alpha;
+	}
+
+	public void setAlpha(int alpha) {
+		this.alpha = alpha;
+	}
+
+	public int getHealth() {
+		return health;
+	}
+
+	public void setHealth(int health) {
+		this.health = health;
+	}
+
+	public int getBig() {
+		return big;
+	}
+
+	public void setBig(int big) {
+		this.big = big;
+	}
+
+	public int getFast() {
+		return fast;
+	}
+
+	public void setFast(int fast) {
+		this.fast = fast;
+	}
+
+	public int getCountJump() {
+		return countJump;
+	}
+
+	public void setCountJump(int countJump) {
+		this.countJump = countJump;
+	}
+
+	public boolean isInvincible() {
+		return invincible;
+	}
+
+	public void setInvincible(boolean invincible) {
+		this.invincible = invincible;
+	}
+
+	public boolean isFall() {
+		return fall;
+	}
+
+	public void setFall(boolean fall) {
+		this.fall = fall;
+	}
+
+	public boolean isJump() {
+		return jump;
+	}
+
+	public void setJump(boolean jump) {
+		this.jump = jump;
+	}
+}

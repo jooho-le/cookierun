@@ -1,35 +1,30 @@
 package ingame;
 
-import java.awt.Image;
-
-// Lombok 제거: 수동 getter/setter 제공
-public class Field {
-
-	private Image image; // 발판 이미지
-
-	// 발판의 좌표와 넓이 높이
+// 화면에 떠다니는 버프/디버프 오브젝트 (Lombok 제거)
+public class BuffItem {
+	private BuffType type;
 	private int x;
 	private int y;
 	private int width;
 	private int height;
 
-	public Field() {
+	public BuffItem() {
 	}
 
-	public Field(Image image, int x, int y, int width, int height) {
-		this.image = image;
+	public BuffItem(BuffType type, int x, int y, int width, int height) {
+		this.type = type;
 		this.x = x;
 		this.y = y;
 		this.width = width;
 		this.height = height;
 	}
 
-	public Image getImage() {
-		return image;
+	public BuffType getType() {
+		return type;
 	}
 
-	public void setImage(Image image) {
-		this.image = image;
+	public void setType(BuffType type) {
+		this.type = type;
 	}
 
 	public int getX() {

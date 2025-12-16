@@ -30,7 +30,7 @@ public class EndPanel extends JPanel {
 	}
 
 	public EndPanel(Object o) {
-		//¹öÆ°
+		//ë²„íŠ¼
 		btnNewButton = new JButton(btn);
 		btnNewButton.setName("endAccept");
 		btnNewButton.addMouseListener((MouseListener) o);
@@ -40,7 +40,7 @@ public class EndPanel extends JPanel {
 		btnNewButton.setContentAreaFilled(false);
 		add(btnNewButton);
 		
-		//Á¡¼ö ±ÛÀÚ 
+		//ì ìˆ˜ ê¸€ì 
 		lblNewLabel_1 = new JLabel("SCORE");	
 		lblNewLabel_1.setHorizontalAlignment(SwingConstants.CENTER);
 		lblNewLabel_1.setFont(new Font("Gill Sans Ultra Bold", Font.PLAIN, 37));

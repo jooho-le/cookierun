@@ -1,35 +1,24 @@
 package ingame;
 
-import java.awt.Image;
-
-// Lombok 제거: 수동 getter/setter 제공
-public class Field {
-
-	private Image image; // 발판 이미지
-
-	// 발판의 좌표와 넓이 높이
+// 적이 발사하는 투사체
+public class Projectile {
 	private int x;
 	private int y;
 	private int width;
 	private int height;
+	private int vx;
+	private int vy;
 
-	public Field() {
+	public Projectile() {
 	}
 
-	public Field(Image image, int x, int y, int width, int height) {
-		this.image = image;
+	public Projectile(int x, int y, int width, int height, int vx, int vy) {
 		this.x = x;
 		this.y = y;
 		this.width = width;
 		this.height = height;
-	}
-
-	public Image getImage() {
-		return image;
-	}
-
-	public void setImage(Image image) {
-		this.image = image;
+		this.vx = vx;
+		this.vy = vy;
 	}
 
 	public int getX() {
@@ -62,5 +51,21 @@ public class Field {
 
 	public void setHeight(int height) {
 		this.height = height;
+	}
+
+	public int getVx() {
+		return vx;
+	}
+
+	public void setVx(int vx) {
+		this.vx = vx;
+	}
+
+	public int getVy() {
+		return vy;
+	}
+
+	public void setVy(int vy) {
+		this.vy = vy;
 	}
 }
