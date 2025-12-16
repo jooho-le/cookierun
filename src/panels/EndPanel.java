@@ -12,6 +12,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 
 public class EndPanel extends JPanel {
@@ -21,12 +22,24 @@ public class EndPanel extends JPanel {
 	JLabel lblNewLabel_1;
 	JLabel lblNewLabel_2;
 	JLabel lblNewLabel;
+	private JTextArea leaderboardArea;
 	
 	
 	private int resultScore;
 	
 	public void setResultScore(int resultScore) {
 		lblNewLabel_2.setText(resultScore+"");
+	}
+
+	public void updateLeaderboard(java.util.List<progress.LeaderboardEntry> entries) {
+		if (leaderboardArea == null) return;
+		StringBuilder sb = new StringBuilder();
+		sb.append("RANKING\n");
+		for (int i = 0; i < entries.size(); i++) {
+			progress.LeaderboardEntry e = entries.get(i);
+			sb.append(String.format("%d. %s : %d\n", i + 1, e.getPlayerName(), e.getScore()));
+		}
+		leaderboardArea.setText(sb.toString());
 	}
 
 	public EndPanel(Object o) {
@@ -59,5 +72,13 @@ public class EndPanel extends JPanel {
 		lblNewLabel.setIcon(new ImageIcon("img/end/cookierunbg.jpg"));
 		lblNewLabel.setBounds(0, 0, 784, 461);
 		add(lblNewLabel);
+		
+		// 리더보드 표시 영역
+		leaderboardArea = new JTextArea();
+		leaderboardArea.setEditable(false);
+		leaderboardArea.setOpaque(false);
+		leaderboardArea.setForeground(Color.WHITE);
+		leaderboardArea.setBounds(30, 120, 250, 250);
+		add(leaderboardArea);
 	}
 }

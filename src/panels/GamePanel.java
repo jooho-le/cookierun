@@ -22,11 +22,15 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.Timer;
 
+import engine.PhysicsUtil;
+import engine.PlayerState;
 import ingame.Back;
 import ingame.BuffItem;
 import ingame.BuffType;
 import ingame.Cookie;
+import ingame.CharacterStats;
 import ingame.CookieImg;
 import ingame.Enemy;
 import ingame.EnemyType;
@@ -38,6 +42,7 @@ import ingame.Projectile;
 import ingame.SpecialPlatform;
 import ingame.Tacle;
 import main.Main;
+import config.Settings;
 import util.Util;
 
 public class GamePanel extends JPanel {
@@ -125,6 +130,10 @@ public class GamePanel extends JPanel {
 	private int speedBonus = 3; // 속도 부스트 가중치
 	private int slowPenalty = 2; // 슬로우 패널티
 	private int magnetRadius = 200; // 자석 범위
+	private int jumpPowerBase = 8; // 점프 기본 계수
+	private int maxHealth = 1000; // 최대 체력
+	private double fallVelocity = 0;
+	private double jumpVelocity = 0;
 
 	private int nowField = 2000; // 발판의 높이를 저장.
 
@@ -148,8 +157,20 @@ public class GamePanel extends JPanel {
 	private boolean giantActive = false;
 	private boolean slowActive = false;
 
+	private Timer gameTimer; // 단일 게임 루프 타이머
+	private long lastTick = 0;
+	private PlayerState playerState = PlayerState.IDLE;
+
 	int face; // 쿠키의 정면
 	int foot; // 쿠키의 발
+
+	// 진행/통계
+	private int totalJelly = 0;
+	private int totalJump = 0;
+	private int totalDistance = 0;
+
+	private progress.SaveData saveData;
+	private Settings settings;
 
 	// 이미지 파일로 된 맵을 가져온다.
 	private int[] sizeArr; // 이미지의 넓이와 높이를 가져오는 1차원 배열
@@ -182,11 +203,12 @@ public class GamePanel extends JPanel {
 	Main main;
 
 	// 게임패널 생성자 (상위 프레임과 카드레이아웃, 그리고 Main인스턴스를 받는다)
-	public GamePanel(JFrame superFrame, CardLayout cl, Object o) {
+	public GamePanel(JFrame superFrame, CardLayout cl, Object o, Settings settings) {
 
 		this.superFrame = superFrame;
 		this.cl = cl;
 		this.main = (Main) o;
+		this.settings = settings;
 
 		// 일시정지 버튼
 		escButton = new JButton("back");
@@ -202,25 +224,22 @@ public class GamePanel extends JPanel {
 	}
 
 	// 게임을 세팅한다
-	public void gameSet(CookieImg ci) {
+	public void gameSet(CookieImg ci, CharacterStats stats, progress.SaveData saveData) {
 
 		setFocusable(true);
+		this.saveData = saveData;
 
 		initCookieImg(ci); // 쿠키이미지를 세팅
 
-		initObject(); // 게임 내 지형지물 인스턴스 생성
+		initObject(stats, saveData); // 게임 내 지형지물 인스턴스 생성
 
 		initListener(); // 키리스너 추가
 
-		runRepaint(); // 리페인트 무한반복 실행
+		startGameLoop(); // 단일 루프 시작
 	}
 
 	// 게임을 시작한다
 	public void gameStart() {
-
-		mapMove(); // 배경 젤리 발판 장애물 작동
-
-		fall(); // 낙하 스레드 발동
 
 	}
 
@@ -395,13 +414,13 @@ public class GamePanel extends JPanel {
 		// 체력게이지를 그린다
 		buffg.drawImage(lifeBar.getImage(), 20, 30, null);
 		buffg.setColor(Color.BLACK);
-		buffg.fillRect(84 + (int) (470 * ((double) c1.getHealth() / 1000)), 65,
-				1 + 470 - (int) (470 * ((double) c1.getHealth() / 1000)), 21);
+		buffg.fillRect(84 + (int) (470 * ((double) c1.getHealth() / maxHealth)), 65,
+				1 + 470 - (int) (470 * ((double) c1.getHealth() / maxHealth)), 21);
 
 		// 체력 수치를 텍스트로 표시한다
 		buffg.setFont(new Font("Arial", Font.BOLD, 14));
 		buffg.setColor(Color.WHITE);
-		buffg.drawString(String.format("HP: %d / 1000", c1.getHealth()), 24, 25);
+		buffg.drawString(String.format("HP: %d / %d", c1.getHealth(), maxHealth), 24, 25);
 
 		// 진행 정보(스테이지/거리/속도)를 표시한다
 		buffg.setFont(new Font("Arial", Font.BOLD, 14));
@@ -606,7 +625,7 @@ public class GamePanel extends JPanel {
 	}
 
 	// makeMo, initImageIcon, imitMap 메서드를 이용해서 객체 생성
-	private void initObject() {
+	private void initObject(CharacterStats stats, progress.SaveData saveData) {
 
 		// 생명게이지 이미지아이콘
 		lifeBar = new ImageIcon("img/Objectimg/lifebar/lifeBar1.png");
@@ -684,6 +703,21 @@ public class GamePanel extends JPanel {
 		// 쿠키 인스턴스 생성 / 기본 자료는 클래스안에 내장 되어 있기 때문에 이미지만 넣었다.
 		c1 = new Cookie(cookieIc.getImage());
 
+		// 능력치 적용 (캐릭터 기본 + 프로필 업그레이드)
+		int profileSpeedUp = saveData.getProfile().getSpeedLevel() - 1;
+		int profileJumpUp = saveData.getProfile().getJumpLevel() - 1;
+		int profileHealthUp = saveData.getProfile().getHealthLevel() - 1;
+
+		baseGameSpeed = stats.getBaseSpeed() + profileSpeedUp;
+		gameSpeed = baseGameSpeed;
+		// 점프 계수는 캐릭터 기본 + 업그레이드 가중치
+		jumpPowerBase = stats.getBaseJump() + profileJumpUp * 2;
+		maxHealth = stats.getBaseHealth() + profileHealthUp * 100;
+		if (maxHealth < 600) {
+			maxHealth = 600;
+		}
+		c1.setHealth(maxHealth);
+
 		// 쿠키의 정면 위치 / 쿠키의 x값과 높이를 더한 값
 		face = c1.getX() + c1.getWidth();
 
@@ -716,7 +750,7 @@ public class GamePanel extends JPanel {
 			@Override
 			public void keyPressed(KeyEvent e) {
 
-				if (e.getKeyCode() == KeyEvent.VK_ESCAPE) { // esc키를 눌렀을 때
+				if (e.getKeyCode() == settings.getKeyPause()) { // esc키를 눌렀을 때
 					if (!escKeyOn) {
 						escKeyOn = true;
 						add(escButton);
@@ -728,13 +762,13 @@ public class GamePanel extends JPanel {
 				}
 
 				if (!escKeyOn) {
-					if (e.getKeyCode() == KeyEvent.VK_SPACE) {// 스페이스 키를 누르고 더블점프가 2가 아닐때
+					if (e.getKeyCode() == settings.getKeyJump()) {// 점프 키를 누르고 더블점프가 2가 아닐때
 						jumpBtn = jumpButtonIconDown.getImage();
 						if (c1.getCountJump() < 2) {
 							jump(); // 점프 메서드 가동
 						}
 					}
-					if (e.getKeyCode() == KeyEvent.VK_DOWN) { // 다운키를 눌렀을 때
+					if (e.getKeyCode() == settings.getKeySlide()) { // 다운키를 눌렀을 때
 						slideBtn = slideIconDown.getImage();
 						downKeyOn = true; // downKeyOn 변수를 true로
 
@@ -764,7 +798,7 @@ public class GamePanel extends JPanel {
 					}
 				}
 
-				if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+				if (e.getKeyCode() == settings.getKeyJump()) {
 					jumpBtn = jumpButtonIconUp.getImage();
 				}
 			}
@@ -772,33 +806,453 @@ public class GamePanel extends JPanel {
 	}
 
 	// 리페인트 전용 쓰레드 추가 메서드
-	private void runRepaint() {
-		// 리페인트 전용 쓰레드
-		new Thread(new Runnable() {
+	private void startGameLoop() {
+		lastTick = Util.getTime();
+		if (gameTimer != null) {
+			gameTimer.stop();
+		}
+		gameTimer = new Timer(16, e -> {
+			long now = Util.getTime();
+			double dt = (now - lastTick) / 1000.0; // seconds
+			lastTick = now;
+			if (!escKeyOn) {
+				updateGame(dt);
+			}
+			repaint();
+		});
+		gameTimer.start();
+	}
 
-			@Override
-			public void run() {
-				while (true) {
-					repaint();
+	// 단일 루프에서 호출되는 업데이트
+	private void updateGame(double dt) {
 
-					if (escKeyOn) { // esc 키를 누를경우 리페인트를 멈춘다
-						while (escKeyOn) {
-							try {
-								Thread.sleep(10);
-							} catch (Exception e) {
-								e.printStackTrace();
-							}
+		refreshBuffFlags();
+		gameSpeed = calcGameSpeed();
+
+		if (Math.random() < 0.0025) {
+			spawnBuffItem();
+		}
+		if (Math.random() < 0.0018) {
+			spawnSpecialPlatform();
+		}
+		if (Math.random() < 0.0015) {
+			spawnEnemy();
+		}
+
+		if (runPage > 800) { // 800픽셀 이동 마다 체력이 10씩 감소한다
+			c1.setHealth(c1.getHealth() - 10);
+			runPage = 0;
+		}
+
+		runPage += gameSpeed; // 화면이 이동하면 runPage에 이동한 만큼 저장된다.
+		totalDistance += gameSpeed;
+		updateProgressDistance();
+
+		foot = c1.getY() + c1.getHeight(); // 캐릭터 발 위치 재스캔
+		if (foot > 1999 || c1.getHealth() < 1) {
+			main.getEndPanel().setResultScore(resultScore);
+			main.getEndPanel().updateLeaderboard(saveData.getLeaderboard());
+			cl.show(superFrame.getContentPane(), "end");
+			main.setGamePanel(new GamePanel(superFrame, cl, main, settings));
+			superFrame.requestFocus();
+			updateLeaderboardAndSave();
+			escKeyOn = true;
+			return;
+		}
+
+		// 배경 이미지 변경 (페이드 스레드는 기존 로직 유지)
+		if (fadeOn == false && mapLengthList.size() >= 3) {
+			if (mapLength > mapLengthList.get(2) * 40 + 800 && b11.getImage() != backIc4.getImage()) {
+				fadeOn = true;
+				new Thread(() -> {
+					backFadeOut();
+					b11 = new Back(backIc4.getImage(), 0, 0, backIc4.getImage().getWidth(null),
+							backIc4.getImage().getHeight(null));
+					b12 = new Back(backIc4.getImage(), backIc4.getImage().getWidth(null), 0,
+							backIc4.getImage().getWidth(null), backIc4.getImage().getHeight(null));
+					b21 = new Back(secondBackIc4.getImage(), 0, 0, secondBackIc4.getImage().getWidth(null),
+							secondBackIc4.getImage().getHeight(null));
+					b22 = new Back(secondBackIc4.getImage(), secondBackIc4.getImage().getWidth(null), 0,
+							secondBackIc4.getImage().getWidth(null), secondBackIc4.getImage().getHeight(null));
+					backFadeIn();
+					fadeOn = false;
+				}).start();
+
+			} else if (mapLength > mapLengthList.get(1) * 40 + 800 && mapLength < mapLengthList.get(2) * 40 + 800
+					&& b11.getImage() != backIc3.getImage()) {
+				fadeOn = true;
+				new Thread(() -> {
+					backFadeOut();
+					b11 = new Back(backIc3.getImage(), 0, 0, backIc3.getImage().getWidth(null),
+							backIc3.getImage().getHeight(null));
+					b12 = new Back(backIc3.getImage(), backIc3.getImage().getWidth(null), 0,
+							backIc3.getImage().getWidth(null), backIc3.getImage().getHeight(null));
+					b21 = new Back(secondBackIc3.getImage(), 0, 0, secondBackIc3.getImage().getWidth(null),
+							secondBackIc3.getImage().getHeight(null));
+					b22 = new Back(secondBackIc3.getImage(), secondBackIc3.getImage().getWidth(null), 0,
+							secondBackIc3.getImage().getWidth(null), secondBackIc3.getImage().getHeight(null));
+					backFadeIn();
+					fadeOn = false;
+				}).start();
+
+			} else if (mapLength > mapLengthList.get(0) * 40 + 800 && mapLength < mapLengthList.get(1) * 40 + 800
+					&& b11.getImage() != backIc2.getImage()) {
+				fadeOn = true;
+				new Thread(() -> {
+					backFadeOut();
+					b11 = new Back(backIc2.getImage(), 0, 0, backIc2.getImage().getWidth(null),
+							backIc2.getImage().getHeight(null));
+					b12 = new Back(backIc2.getImage(), backIc2.getImage().getWidth(null), 0,
+							backIc2.getImage().getWidth(null), backIc2.getImage().getHeight(null));
+					b21 = new Back(secondBackIc2.getImage(), 0, 0, secondBackIc2.getImage().getWidth(null),
+							secondBackIc2.getImage().getHeight(null));
+					b22 = new Back(secondBackIc2.getImage(), secondBackIc2.getImage().getWidth(null), 0,
+							secondBackIc2.getImage().getWidth(null), secondBackIc2.getImage().getHeight(null));
+					backFadeIn();
+					fadeOn = false;
+				}).start();
+			}
+		}
+
+		mapLength += gameSpeed;
+
+		// 배경 이동
+		if (b11.getX() < -(b11.getWidth() - 1)) {
+			b11.setX(b11.getWidth());
+		}
+		if (b12.getX() < -(b12.getWidth() - 1)) {
+			b12.setX(b12.getWidth());
+		}
+		if (b21.getX() < -(b21.getWidth() - 1)) {
+			b21.setX(b21.getWidth());
+		}
+		if (b22.getX() < -(b22.getWidth() - 1)) {
+			b22.setX(b22.getWidth());
+		}
+		b11.setX(b11.getX() - gameSpeed / 3);
+		b12.setX(b12.getX() - gameSpeed / 3);
+		b21.setX(b21.getX() - gameSpeed * 2 / 3);
+		b22.setX(b22.getX() - gameSpeed * 2 / 3);
+
+		// 발판 이동
+		for (int i = 0; i < fieldList.size(); i++) {
+			Field tempField = fieldList.get(i);
+			if (tempField.getX() < -90) {
+				fieldList.remove(tempField);
+			} else {
+				tempField.setX(tempField.getX() - gameSpeed);
+			}
+		}
+
+		// 젤리 이동/획득
+		for (int i = 0; i < jellyList.size(); i++) {
+			Jelly tempJelly = jellyList.get(i);
+			if (tempJelly.getX() < -90) {
+				fieldList.remove(tempJelly);
+			} else {
+				tempJelly.setX(tempJelly.getX() - gameSpeed);
+				if (tempJelly.getImage() == jellyEffectIc.getImage() && tempJelly.getAlpha() > 4) {
+					tempJelly.setAlpha(tempJelly.getAlpha() - 5);
+				}
+				if (magnetActive) {
+					int centerX = tempJelly.getX() + tempJelly.getWidth() / 2;
+					int centerY = tempJelly.getY() + tempJelly.getHeight() / 2;
+					int cookieCenterX = c1.getX() + c1.getWidth() / 2;
+					int cookieCenterY = c1.getY() + c1.getHeight() / 2;
+					double distance = Math.sqrt(Math.pow(centerX - cookieCenterX, 2) + Math.pow(centerY - cookieCenterY, 2));
+					if (distance < magnetRadius && distance > 0) {
+						int pull = 4;
+						if (centerX > cookieCenterX) {
+							tempJelly.setX(tempJelly.getX() - pull);
+						} else {
+							tempJelly.setX(tempJelly.getX() + pull);
+						}
+						if (centerY > cookieCenterY) {
+							tempJelly.setY(tempJelly.getY() - pull);
+						} else {
+							tempJelly.setY(tempJelly.getY() + pull);
 						}
 					}
+				}
 
-					try {
-						Thread.sleep(10);
-					} catch (Exception e) {
-						e.printStackTrace();
+				foot = c1.getY() + c1.getHeight();
+				if (c1.getImage() != slideIc.getImage() && tempJelly.getX() + tempJelly.getWidth() * 20 / 100 >= c1.getX()
+						&& tempJelly.getX() + tempJelly.getWidth() * 80 / 100 <= face
+						&& tempJelly.getY() + tempJelly.getWidth() * 20 / 100 >= c1.getY()
+						&& tempJelly.getY() + tempJelly.getWidth() * 80 / 100 <= foot
+						&& tempJelly.getImage() != jellyEffectIc.getImage()) {
+
+					if (tempJelly.getImage() == jellyHPIc.getImage()) {
+						if ((c1.getHealth() + 100) > maxHealth) {
+							c1.setHealth(maxHealth);
+						} else {
+							c1.setHealth(c1.getHealth() + 100);
+						}
+					}
+					tempJelly.setImage(jellyEffectIc.getImage());
+					int plusScore = tempJelly.getScore();
+					if (doubleScoreActive) {
+						plusScore = plusScore * 2;
+					}
+					resultScore = resultScore + plusScore;
+					totalJelly++;
+					updateProgressJelly();
+
+				} else if (c1.getImage() == slideIc.getImage()
+						&& tempJelly.getX() + tempJelly.getWidth() * 20 / 100 >= c1.getX()
+						&& tempJelly.getX() + tempJelly.getWidth() * 80 / 100 <= face
+						&& tempJelly.getY() + tempJelly.getWidth() * 20 / 100 >= c1.getY() + c1.getHeight() * 1 / 3
+						&& tempJelly.getY() + tempJelly.getWidth() * 80 / 100 <= foot
+						&& tempJelly.getImage() != jellyEffectIc.getImage()) {
+
+					if (tempJelly.getImage() == jellyHPIc.getImage()) {
+						if ((c1.getHealth() + 100) > maxHealth) {
+							c1.setHealth(maxHealth);
+						} else {
+							c1.setHealth(c1.getHealth() + 100);
+						}
+					}
+					tempJelly.setImage(jellyEffectIc.getImage());
+					int plusScore = tempJelly.getScore();
+					if (doubleScoreActive) {
+						plusScore = plusScore * 2;
+					}
+					resultScore = resultScore + plusScore;
+					totalJelly++;
+					updateProgressJelly();
+				}
+			}
+		}
+
+		// 버프/디버프 아이템 이동 및 획득
+		for (int i = 0; i < buffItemList.size(); i++) {
+			BuffItem item = buffItemList.get(i);
+			if (item.getX() < -60) {
+				buffItemList.remove(item);
+				continue;
+			}
+			item.setX(item.getX() - gameSpeed);
+
+			face = c1.getX() + c1.getWidth();
+			foot = c1.getY() + c1.getHeight();
+			if (item.getX() + item.getWidth() >= c1.getX() && item.getX() <= face
+					&& item.getY() + item.getHeight() >= c1.getY() && item.getY() <= foot) {
+				applyBuffFromItem(item.getType());
+				buffItemList.remove(item);
+			}
+		}
+
+		// 장애물 이동 및 충돌
+		for (int i = 0; i < tacleList.size(); i++) {
+			Tacle tempTacle = tacleList.get(i);
+			if (tempTacle.getX() < -90) {
+				fieldList.remove(tempTacle);
+			} else {
+				tempTacle.setX(tempTacle.getX() - gameSpeed);
+				face = c1.getX() + c1.getWidth();
+				foot = c1.getY() + c1.getHeight();
+
+				boolean collide =
+						!c1.isInvincible() && tempTacle.getX() + tempTacle.getWidth() / 2 >= c1.getX()
+						&& tempTacle.getX() + tempTacle.getWidth() / 2 <= face
+						&& tempTacle.getY() + tempTacle.getHeight() / 2 >= c1.getY()
+						&& tempTacle.getY() + tempTacle.getHeight() / 2 <= foot;
+
+				boolean collideAir =
+						!c1.isInvincible() && tempTacle.getX() + tempTacle.getWidth() / 2 >= c1.getX()
+						&& tempTacle.getX() + tempTacle.getWidth() / 2 <= face
+						&& tempTacle.getY() < c1.getY()
+						&& tempTacle.getY() + tempTacle.getHeight() * 95 / 100 > c1.getY();
+
+				if (collide || collideAir) {
+					if (giantActive) {
+						tacleList.remove(tempTacle);
+						resultScore += 200;
+					} else if (shieldActive) {
+						shieldActive = false;
+						buffEndTime.put(BuffType.SHIELD, 0L);
+					} else {
+						hit();
 					}
 				}
 			}
-		}).start();
+		}
+
+		// 특수 발판 이동/충돌
+		for (int i = 0; i < specialPlatforms.size(); i++) {
+			SpecialPlatform sp = specialPlatforms.get(i);
+			if (sp.getX() < -120) {
+				specialPlatforms.remove(sp);
+				continue;
+			}
+			sp.setX(sp.getX() - gameSpeed + sp.getVx());
+			sp.setY(sp.getY() + sp.getVy());
+			if (sp.getType() == PlatformType.MOVING) {
+				if (sp.getY() < 120 || sp.getY() > 320) {
+					sp.setVy(-sp.getVy());
+				}
+			}
+			if (sp.getType() == PlatformType.COLLAPSING && sp.isTriggered()) {
+				if (Util.getTime() - sp.getCollapseStart() > 600) {
+					specialPlatforms.remove(sp);
+					continue;
+				}
+			}
+			if (sp.getType() == PlatformType.FALLING && sp.isTriggered()) {
+				sp.setVy(sp.getVy() + 1);
+			}
+		}
+
+		// 적 이동/충돌
+		for (int i = 0; i < enemyList.size(); i++) {
+			Enemy enemy = enemyList.get(i);
+			if (enemy.getX() < -120) {
+				enemyList.remove(enemy);
+				continue;
+			}
+			if (enemy.getType() == EnemyType.CHASER) {
+				if (enemy.getY() < c1.getY()) {
+					enemy.setY(enemy.getY() + 1);
+				} else if (enemy.getY() > c1.getY()) {
+					enemy.setY(enemy.getY() - 1);
+				}
+			} else if (enemy.getType() == EnemyType.VERTICAL) {
+				if (enemy.getY() < 120 || enemy.getY() > 340) {
+					enemy.setVy(-enemy.getVy());
+				}
+				enemy.setY(enemy.getY() + enemy.getVy());
+			} else if (enemy.getType() == EnemyType.SHOOTER) {
+				if (Util.getTime() - enemy.getLastFire() > 1500) {
+					projectileList.add(new Projectile(enemy.getX(), enemy.getY() + enemy.getHeight() / 2, 12, 12, -8, 0));
+					enemy.setLastFire(Util.getTime());
+				}
+			}
+			enemy.setX(enemy.getX() - gameSpeed - 1);
+
+			if (!c1.isInvincible() && enemy.getX() < face && enemy.getX() + enemy.getWidth() > c1.getX()
+					&& enemy.getY() < foot && enemy.getY() + enemy.getHeight() > c1.getY()) {
+				if (giantActive) {
+					enemyList.remove(enemy);
+					resultScore += 200;
+				} else if (shieldActive) {
+					shieldActive = false;
+					buffEndTime.put(BuffType.SHIELD, 0L);
+					enemyList.remove(enemy);
+				} else {
+					hit();
+				}
+			}
+		}
+
+		// 투사체 이동/충돌
+		for (int i = 0; i < projectileList.size(); i++) {
+			Projectile p = projectileList.get(i);
+			p.setX(p.getX() + p.getVx());
+			p.setY(p.getY() + p.getVy());
+			if (p.getX() < -40 || p.getX() > 900) {
+				projectileList.remove(p);
+				continue;
+			}
+			if (!c1.isInvincible() && p.getX() < face && p.getX() + p.getWidth() > c1.getX() && p.getY() < foot
+					&& p.getY() + p.getHeight() > c1.getY()) {
+				if (shieldActive) {
+					shieldActive = false;
+					buffEndTime.put(BuffType.SHIELD, 0L);
+				} else {
+					hit();
+				}
+				projectileList.remove(p);
+			}
+		}
+
+		// 쿠키가 밟을 발판 높이 계산
+		int tempField;
+		int tempNowField;
+		if (c1.isInvincible()) {
+			tempNowField = 400;
+		} else {
+			tempNowField = 2000;
+		}
+		for (int i = 0; i < fieldList.size(); i++) {
+			int tempX = fieldList.get(i).getX();
+			if (tempX > c1.getX() - 60 && tempX <= face) {
+				tempField = fieldList.get(i).getY();
+				foot = c1.getY() + c1.getHeight();
+				if (tempField < tempNowField && tempField >= foot) {
+					tempNowField = tempField;
+				}
+			}
+		}
+		for (int i = 0; i < specialPlatforms.size(); i++) {
+			SpecialPlatform sp = specialPlatforms.get(i);
+			int tempX = sp.getX();
+			if (tempX > c1.getX() - 60 && tempX <= face) {
+				tempField = sp.getY();
+				foot = c1.getY() + c1.getHeight();
+				if (tempField < tempNowField && tempField >= foot) {
+					tempNowField = tempField;
+					if (!sp.isTriggered()) {
+						if (sp.getType() == PlatformType.FALLING || sp.getType() == PlatformType.COLLAPSING) {
+							sp.setTriggered(true);
+							sp.setCollapseStart(Util.getTime());
+						}
+					}
+					if (sp.getType() == PlatformType.JUMPPAD) {
+						c1.setY(c1.getY() - 15);
+						c1.setJump(true);
+						c1.setCountJump(1);
+					} else if (sp.getType() == PlatformType.RAIL) {
+						downKeyOn = true;
+						c1.setImage(slideIc.getImage());
+					}
+				}
+			}
+		}
+		nowField = tempNowField;
+
+		applyGravityAndLanding();
+	}
+
+	private void applyGravityAndLanding() {
+		foot = c1.getY() + c1.getHeight();
+		if (c1.isJump()) { // 상승 중
+			if (jumpVelocity > 0) {
+				c1.setY(c1.getY() - (int) Math.round(jumpVelocity));
+				jumpVelocity -= 1.2;
+			} else {
+				c1.setJump(false);
+				playerState = PlayerState.FALL;
+			}
+		}
+
+		foot = c1.getY() + c1.getHeight();
+		if (!escKeyOn && foot < nowField && !c1.isJump()) {
+			c1.setFall(true);
+			fallVelocity += 0.8;
+			if (fallVelocity > 20) {
+				fallVelocity = 20;
+			}
+			int fallY = (int) Math.round(fallVelocity);
+			if (foot + fallY >= nowField) {
+				fallY = nowField - foot;
+				c1.setFall(false);
+				fallVelocity = 0;
+				if (!downKeyOn) {
+					c1.setImage(cookieIc.getImage());
+				} else {
+					c1.setImage(slideIc.getImage());
+				}
+				c1.setCountJump(0);
+			}
+			c1.setY(c1.getY() + fallY);
+			playerState = PlayerState.FALL;
+		} else if (foot >= nowField) {
+			c1.setFall(false);
+			fallVelocity = 0;
+			if (!c1.isJump()) {
+				playerState = PlayerState.RUN;
+			}
+		}
 	}
 
 	// 화면을 움직이고 젤리를 먹거나, 장애물에 부딛히는 등의 이벤트를 발생시키는 메서드
@@ -831,13 +1285,16 @@ public class GamePanel extends JPanel {
 					}
 
 					runPage += gameSpeed; // 화면이 이동하면 runPage에 이동한 만큼 저장된다.
+					totalDistance += gameSpeed;
+					updateProgressDistance();
 
 					foot = c1.getY() + c1.getHeight(); // 캐릭터 발 위치 재스캔
 					if (foot > 1999 || c1.getHealth() < 1) {
 						main.getEndPanel().setResultScore(resultScore);
 						cl.show(superFrame.getContentPane(), "end");
-						main.setGamePanel(new GamePanel(superFrame, cl, main));
+						main.setGamePanel(new GamePanel(superFrame, cl, main, settings));
 						superFrame.requestFocus();
+						updateLeaderboardAndSave();
 						escKeyOn = true;
 					}
 
@@ -1027,7 +1484,7 @@ public class GamePanel extends JPanel {
 
 								if (tempJelly.getImage() == jellyHPIc.getImage()) {
 									if ((c1.getHealth() + 100) > 1000) {
-										c1.setHealth(1000);
+										c1.setHealth(maxHealth);
 									} else {
 										c1.setHealth(c1.getHealth() + 100);
 									}
@@ -1038,6 +1495,8 @@ public class GamePanel extends JPanel {
 									plusScore = plusScore * 2;
 								}
 								resultScore = resultScore + plusScore; // 총점수에 젤리 점수를 더한다
+								totalJelly++;
+								updateProgressJelly();
 
 							} else if ( // 슬라이딩 하는 캐릭터의 범위 안에 젤리가 있으면 아이템을 먹는다.
 							c1.getImage() == slideIc.getImage()
@@ -1050,7 +1509,7 @@ public class GamePanel extends JPanel {
 
 								if (tempJelly.getImage() == jellyHPIc.getImage()) {
 									if ((c1.getHealth() + 100) > 1000) {
-										c1.setHealth(1000);
+										c1.setHealth(maxHealth);
 									} else {
 										c1.setHealth(c1.getHealth() + 100);
 									}
@@ -1061,6 +1520,8 @@ public class GamePanel extends JPanel {
 									plusScore = plusScore * 2;
 								}
 								resultScore = resultScore + plusScore; // 총점수에 젤리 점수를 더한다
+								totalJelly++;
+								updateProgressJelly();
 
 							}
 						}
@@ -1518,73 +1979,21 @@ public class GamePanel extends JPanel {
 
 	// 점프 메서드
 	private void jump() {
-		new Thread(new Runnable() {
+		c1.setCountJump(c1.getCountJump() + 1); // 점프 횟수 증가
 
-			@Override
-			public void run() {
+		if (c1.getCountJump() == 1) {
+			c1.setImage(jumpIc.getImage());
+			playerState = PlayerState.JUMP;
+		} else if (c1.getCountJump() == 2) {
+			c1.setImage(doubleJumpIc.getImage());
+			playerState = PlayerState.DOUBLE_JUMP;
+		}
 
-				c1.setCountJump(c1.getCountJump() + 1); // 점프 횟수 증가
+		c1.setJump(true);
+		jumpVelocity = jumpPowerBase;
 
-				int nowJump = c1.getCountJump(); // 이번점프가 점프인지 더블점프인지 저장
-
-				c1.setJump(true); // 점프중으로 변경
-
-				if (c1.getCountJump() == 1) { // 점프 횟수가 1이라면
-
-					System.out.println("점프");
-					c1.setImage(jumpIc.getImage());
-
-				} else if (c1.getCountJump() == 2) { // 점프 횟수가 2라면
-
-					System.out.println("더블점프");
-					c1.setImage(doubleJumpIc.getImage());
-
-				}
-
-				long t1 = Util.getTime(); // 현재시간을 가져온다
-				long t2;
-				int set = 8; // 점프 계수 설정(0~20) 등으로 바꿔보자
-				int jumpY = 1; // 1이상으로만 설정하면 된다.(while문 조건 때문)
-
-				while (jumpY >= 0) { // 상승 높이가 0일때까지 반복
-
-					t2 = Util.getTime() - t1; // 지금 시간에서 t1을 뺀다
-
-					jumpY = set - (int) ((t2) / 40); // jumpY 를 세팅한다.
-
-					c1.setY(c1.getY() - jumpY); // Y값을 변경한다.
-
-					if (nowJump != c1.getCountJump()) { // 점프가 한번 더되면 첫번째 점프는 멈춘다.
-						break;
-					}
-
-					if (escKeyOn) {
-						long tempT1 = Util.getTime();
-						long tempT2 = 0;
-						while (escKeyOn) {
-							try {
-								Thread.sleep(10);
-							} catch (InterruptedException e) {
-								e.printStackTrace();
-							}
-						}
-						tempT2 = Util.getTime() - tempT1;
-						t1 = t1 + tempT2;
-					}
-
-					try {
-						Thread.sleep(10);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-				}
-
-				if (nowJump == c1.getCountJump()) { // 점프가 진짜 끝났을 때를 확인
-					c1.setJump(false); // 점프상태를 false로 변경
-				}
-
-			}
-		}).start();
+		totalJump++;
+		updateProgressJump();
 	}
 
 	private void backFadeOut() {
@@ -1818,6 +2227,60 @@ public class GamePanel extends JPanel {
 		default:
 			break;
 		}
+	}
+
+	// 업적/미션 진행 업데이트
+	private void updateProgressJelly() {
+		if (saveData == null) {
+			return;
+		}
+		saveData.getAchievements().forEach(a -> {
+			if (a.getId().equals("a2")) {
+				a.addProgress(1);
+			}
+		});
+		saveData.getMissions().forEach(m -> {
+			if (m.getId().equals("m2")) {
+				m.addProgress(1);
+			}
+		});
+	}
+
+	private void updateProgressJump() {
+		if (saveData == null) {
+			return;
+		}
+		saveData.getAchievements().forEach(a -> {
+			if (a.getId().equals("a1")) {
+				a.addProgress(1);
+			}
+		});
+	}
+
+	private void updateProgressDistance() {
+		if (saveData == null) {
+			return;
+		}
+		saveData.getMissions().forEach(m -> {
+			if (m.getId().equals("m1")) {
+				m.addProgress(gameSpeed);
+			}
+		});
+	}
+
+	private void updateLeaderboardAndSave() {
+		if (saveData == null) {
+			return;
+		}
+		saveData.getLeaderboard().add(
+				new progress.LeaderboardEntry(saveData.getProfile().getName(), resultScore, java.time.LocalDateTime.now()));
+		saveData.getLeaderboard().sort((a, b) -> Integer.compare(b.getScore(), a.getScore()));
+		if (saveData.getLeaderboard().size() > 10) {
+			saveData.getLeaderboard().subList(10, saveData.getLeaderboard().size()).clear();
+		}
+		int gainedCoins = resultScore / 10;
+		saveData.getProfile().addCoins(gainedCoins);
+		progress.SaveManager.save("slot1", saveData);
 	}
 
 	// 특수 발판 스폰 (데모용)

@@ -15,6 +15,12 @@ import panels.GamePanel;
 import panels.IntroPanel;
 import panels.SelectPanel;
 import main.listenAdapter;
+import progress.SaveData;
+import progress.SaveManager;
+import config.ConfigManager;
+import config.Settings;
+import progress.SaveData;
+import progress.SaveManager;
 
 import java.awt.CardLayout;
 
@@ -35,6 +41,10 @@ public class Main extends listenAdapter {
 	private CardLayout cl; // 카드 레이이웃 오브젝트
 
 	private CookieImg ci; // 쿠키이미지
+	private ingame.CharacterStats characterStats; // 캐릭터 능력치
+
+	private SaveData saveData; // 세이브 데이터 (프로필/업적/미션/리더보드)
+	private Settings settings; // 설정(키맵/볼륨)
 
 	public GamePanel getGamePanel() {
 		return gamePanel;
@@ -46,6 +56,23 @@ public class Main extends listenAdapter {
 
 	public EndPanel getEndPanel() {
 		return endPanel;
+	}
+
+	public SaveData getSaveData() {
+		return saveData;
+	}
+
+	public void setSaveData(SaveData saveData) {
+		this.saveData = saveData;
+	}
+
+	public Settings getSettings() {
+		return settings;
+	}
+
+	public void setSettings(Settings settings) {
+		this.settings = settings;
+		ConfigManager.save("config/settings.json", settings);
 	}
 
 
@@ -66,6 +93,9 @@ public class Main extends listenAdapter {
 	}
 
 	public Main() {
+		// 기본 슬롯 로드
+		saveData = SaveManager.load("slot1", "Player");
+		settings = ConfigManager.load("config/settings.json");
 		initialize();
 	}
 
@@ -80,8 +110,8 @@ public class Main extends listenAdapter {
 		introPanel = new IntroPanel();
 		introPanel.addMouseListener(this); // intro패널은 여기서 바로 넣는 방식으로 마우스리스너를 추가함.
 		
-		selectPanel = new SelectPanel(this); // Main의 리스너를 넣기위한 this
-		gamePanel = new GamePanel(frame, cl, this); // Main의 프레임 및 카드레이아웃을 이용하고 리스너를 넣기위한 this
+		selectPanel = new SelectPanel(this, saveData, settings); // Main의 리스너를 넣기위한 this
+		gamePanel = new GamePanel(frame, cl, this, settings); // Main의 프레임 및 카드레이아웃을 이용하고 리스너를 넣기위한 this
 		endPanel = new EndPanel(this); // Main의 리스너를 넣기위한 this
 
 		// 모든 패널의 레이아웃을 null로 변환
@@ -113,20 +143,22 @@ public class Main extends listenAdapter {
 			if (selectPanel.getCi() == null) {
 				JOptionPane.showMessageDialog(null, "캐릭터를 골라주세요"); // 캐릭터를 안골랐을경우 팝업
 			} else {
+				this.ci = selectPanel.getCi();
+				this.characterStats = selectPanel.getCharacterStats();
 				cl.show(frame.getContentPane(), "game"); // 캐릭터를 골랐다면 게임패널을 카드레이아웃 최상단으로 변경
-				gamePanel.gameSet(selectPanel.getCi()); // 쿠키이미지를 넘겨주고 게임패널 세팅
+				gamePanel.gameSet(ci, characterStats, saveData); // 쿠키이미지, 스탯, 세이브데이터 넘기기
 				gamePanel.gameStart(); // 게임시작
 				gamePanel.requestFocus(); // 리스너를 game패널에 강제로 줌
 			}
 			
 		} else if (e.getComponent().getName().equals("endAccept")) { // endAccept 이라는 이름을 가진 버튼을 눌렀다면
 			frame.getContentPane().remove(gamePanel); // 방금 했던 게임 패널을 프레임에서 삭제
-			gamePanel = new GamePanel(frame, cl, this); // 게임패널을 새 패널로 교체
+			gamePanel = new GamePanel(frame, cl, this, settings); // 게임패널을 새 패널로 교체
 			gamePanel.setLayout(null);
 			frame.getContentPane().add(gamePanel, "game"); // 프레임에 새 게임패널 추가(카드레이아웃 하단)
 			
 			frame.getContentPane().remove(selectPanel); // 방금 선택했던 select패널을 삭제
-			selectPanel = new SelectPanel(this); // select 패널을 새 패널로 교체
+			selectPanel = new SelectPanel(this, saveData, settings); // select 패널을 새 패널로 교체
 			selectPanel.setLayout(null);
 			frame.getContentPane().add(selectPanel, "select"); // 프레임에 새 select패널 추가(카드레이아웃 하단)
 			cl.show(frame.getContentPane(), "select"); // 새 select패널을 카드레이아웃 최상단으로 이동 (화면에 보임)

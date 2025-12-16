@@ -1,7 +1,6 @@
 package panels;
 
 import java.awt.Color;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
@@ -10,12 +9,20 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 
+import ingame.CharacterStats;
 import ingame.CookieImg;
+import progress.SaveData;
+import progress.SaveManager;
+import main.Main;
+import config.Settings;
 
 public class SelectPanel extends JPanel {
 
+	private Main mainRef;
 	
 	// 선택할 캐릭터 이미지 아이콘
 	private ImageIcon ch01 = new ImageIcon("img/select/selectCh1.png");
@@ -43,13 +50,90 @@ public class SelectPanel extends JPanel {
 	
 	// 게임에서 사용할 쿠키 이미지들을 담을 오브젝트
 	private CookieImg ci;
+	private CharacterStats characterStats;
+	private JLabel statsLabel;
+private JLabel profileLabel;
+private JLabel missionLabel;
+private JLabel achievementLabel;
+private JLabel leaderboardLabel;
+	private SaveData saveData;
+	private JTextArea infoArea;
+	private Settings settings;
 
 	// 쿠키 이미지를 메인에서 gamePanel로 보내기 위한 게터
 	public CookieImg getCi() {
 		return ci;
 	}
 
-	public SelectPanel(Object o) {
+	public CharacterStats getCharacterStats() {
+		return characterStats;
+	}
+
+	private CharacterStats randomStats(String id) {
+		int speed = 5 + (int) (Math.random() * 3); // 5~7
+		int jump = 7 + (int) (Math.random() * 4); // 7~10
+		int health = 900 + (int) (Math.random() * 300); // 900~1199
+		return new CharacterStats(id, speed, jump, health);
+	}
+
+	private void updateStatsLabel(String name, CharacterStats stats) {
+		if (statsLabel == null) {
+			return;
+		}
+		statsLabel.setText(String.format("%s | Speed %d / Jump %d / HP %d", name, stats.getBaseSpeed(),
+				stats.getBaseJump(), stats.getBaseHealth()));
+		showStatPopup(name, stats);
+	}
+
+	private void updateProfileLabel() {
+		if (profileLabel == null || saveData == null) {
+			return;
+		}
+		profileLabel.setText(String.format("Coins: %d | Speed Lv.%d Jump Lv.%d HP Lv.%d", saveData.getProfile().getCoins(),
+				saveData.getProfile().getSpeedLevel(), saveData.getProfile().getJumpLevel(),
+				saveData.getProfile().getHealthLevel()));
+	}
+
+	private void refreshInfoArea() {
+		if (infoArea == null || saveData == null) {
+			return;
+		}
+		StringBuilder sb = new StringBuilder();
+		sb.append("[Missions]\n");
+		saveData.getMissions().forEach(m -> {
+			sb.append(String.format("- %s: %d/%d %s\n", m.getDescription(), m.getProgress(), m.getTarget(),
+					m.isCompleted() ? "(완료)" : ""));
+		});
+		sb.append("[Achievements]\n");
+		saveData.getAchievements().forEach(a -> {
+			sb.append(String.format("- %s: %d/%d %s\n", a.getTitle(), a.getProgress(), a.getTarget(),
+					a.isAchieved() ? "(달성)" : ""));
+		});
+		sb.append("[Leaderboard]\n");
+		saveData.getLeaderboard().stream().limit(5).forEach(entry -> {
+			sb.append(String.format("- %s : %d\n", entry.getPlayerName(), entry.getScore()));
+		});
+		infoArea.setText(sb.toString());
+	}
+
+	private void switchSlot(String slotName) {
+		SaveData loaded = SaveManager.load(slotName, saveData.getProfile().getName());
+		this.saveData = loaded;
+		mainRef.setSaveData(loaded);
+		updateProfileLabel();
+		refreshInfoArea();
+	}
+
+	private void showStatPopup(String name, CharacterStats stats) {
+		String msg = String.format("%s\nSpeed: %d\nJump: %d\nHP: %d", name, stats.getBaseSpeed(), stats.getBaseJump(),
+				stats.getBaseHealth());
+		javax.swing.JOptionPane.showMessageDialog(this, msg, "선택한 캐릭터 능력치", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+	}
+
+	public SelectPanel(Object o, SaveData saveData, Settings settings) {
+		this.saveData = saveData;
+		this.mainRef = (Main) o;
+		this.settings = settings;
 
 		// 시작 버튼
 		StartBtn = new JButton(start);
@@ -77,6 +161,8 @@ public class SelectPanel extends JPanel {
 						new ImageIcon("img/cookieimg/cookie1/player_jumpend.png"),
 						new ImageIcon("img/cookieimg/cookie1/player_down.gif"),
 						new ImageIcon("img/cookieimg/cookie1/player_attack.png"));
+				characterStats = randomStats("ch1");
+				updateStatsLabel("쿠키1", characterStats);
 			}
 		});
 		ch1.setBounds(90, 102, 150, 200);
@@ -101,6 +187,8 @@ public class SelectPanel extends JPanel {
 						new ImageIcon("img/cookieimg/cookie2/fall.png"),
 						new ImageIcon("img/cookieimg/cookie2/slide.gif"),
 						new ImageIcon("img/cookieimg/cookie2/hit.gif"));
+				characterStats = randomStats("ch2");
+				updateStatsLabel("쿠키2", characterStats);
 			}
 		});
 		ch2.setBounds(238, 102, 150, 200);
@@ -125,6 +213,8 @@ public class SelectPanel extends JPanel {
 						new ImageIcon("img/cookieimg/cookie3/fall.png"),
 						new ImageIcon("img/cookieimg/cookie3/slide.gif"),
 						new ImageIcon("img/cookieimg/cookie3/hit.png"));
+				characterStats = randomStats("ch3");
+				updateStatsLabel("쿠키3", characterStats);
 			}
 		});
 		ch3.setBounds(386, 102, 150, 200);
@@ -149,6 +239,8 @@ public class SelectPanel extends JPanel {
 						new ImageIcon("img/cookieimg/cookie4/kjump.gif"),
 						new ImageIcon("img/cookieimg/cookie4/kslide.gif"),
 						new ImageIcon("img/cookieimg/cookie4/kch.gif"));
+				characterStats = randomStats("ch4");
+				updateStatsLabel("쿠키4", characterStats);
 			}
 		});
 		ch4.setBounds(534, 102, 150, 200);
@@ -156,7 +248,7 @@ public class SelectPanel extends JPanel {
 		ch4.setBorderPainted(false);
 		ch4.setContentAreaFilled(false);
 		ch4.setFocusPainted(false);
-		
+
 		// 배경
 		JLabel selectBg = new JLabel("");
 		selectBg.setForeground(Color.ORANGE);
@@ -171,6 +263,78 @@ public class SelectPanel extends JPanel {
 		selectTxt.setIcon(new ImageIcon("img/select/selectTxt.png"));
 		selectTxt.setBounds(174, 20, 397, 112);
 		add(selectTxt);
+
+		// 능력치 표시 라벨 (배경 위로 오도록 마지막에 추가)
+		statsLabel = new JLabel("캐릭터를 선택하세요");
+		statsLabel.setForeground(Color.WHITE);
+		statsLabel.setBounds(150, 290, 500, 20);
+		add(statsLabel);
+
+		// 프로필 정보 라벨
+		profileLabel = new JLabel("");
+		profileLabel.setForeground(Color.WHITE);
+		profileLabel.setBounds(150, 310, 500, 20);
+		add(profileLabel);
+		updateProfileLabel();
+
+		// 정보 영역 (미션/업적/리더보드)
+		infoArea = new JTextArea();
+		infoArea.setEditable(false);
+		infoArea.setOpaque(false);
+		infoArea.setForeground(Color.WHITE);
+		infoArea.setBounds(20, 340, 300, 120);
+		add(infoArea);
+		refreshInfoArea();
+
+		// 업그레이드 버튼
+		JButton upSpeed = new JButton("Speed Up");
+		upSpeed.setBounds(620, 110, 120, 30);
+		upSpeed.addActionListener(e -> {
+			if (saveData.getProfile().upgradeSpeed()) {
+				updateProfileLabel();
+				refreshInfoArea();
+				SaveManager.save("slot1", saveData);
+			}
+		});
+		add(upSpeed);
+
+		JButton upJump = new JButton("Jump Up");
+		upJump.setBounds(620, 150, 120, 30);
+		upJump.addActionListener(e -> {
+			if (saveData.getProfile().upgradeJump()) {
+				updateProfileLabel();
+				refreshInfoArea();
+				SaveManager.save("slot1", saveData);
+			}
+		});
+		add(upJump);
+
+		JButton upHp = new JButton("HP Up");
+		upHp.setBounds(620, 190, 120, 30);
+		upHp.addActionListener(e -> {
+			if (saveData.getProfile().upgradeHealth()) {
+				updateProfileLabel();
+				refreshInfoArea();
+				SaveManager.save("slot1", saveData);
+			}
+		});
+		add(upHp);
+
+		// 슬롯 전환 버튼
+		JButton slot1 = new JButton("Slot1");
+		slot1.setBounds(620, 230, 70, 28);
+		slot1.addActionListener(e -> switchSlot("slot1"));
+		add(slot1);
+
+		JButton slot2 = new JButton("Slot2");
+		slot2.setBounds(695, 230, 70, 28);
+		slot2.addActionListener(e -> switchSlot("slot2"));
+		add(slot2);
+
+		JButton slot3 = new JButton("Slot3");
+		slot3.setBounds(770, 230, 70, 28);
+		slot3.addActionListener(e -> switchSlot("slot3"));
+		add(slot3);
 
 	}
 }
