@@ -69,10 +69,26 @@ private JLabel leaderboardLabel;
 		return characterStats;
 	}
 
-	private CharacterStats randomStats(String id) {
-		int speed = 5 + (int) (Math.random() * 3); // 5~7
-		int jump = 7 + (int) (Math.random() * 4); // 7~10
-		int health = 900 + (int) (Math.random() * 300); // 900~1199
+	// 캐릭터별 기본 능력치 세팅 (점프는 캐릭터 순서대로 점차 상승)
+	private CharacterStats statsForId(String id) {
+		int speed = 6; // 기본 속도
+		int health = 1000; // 기본 체력
+		int jump = 14; // 기본 점프
+
+		if ("ch1".equals(id)) { // 가장 낮은 점프 = 가장 빠른 속도
+			jump = 14;
+			speed = 8;
+		} else if ("ch2".equals(id)) {
+			jump = 16;
+			speed = 7;
+		} else if ("ch3".equals(id)) {
+			jump = 18;
+			speed = 6;
+		} else if ("ch4".equals(id)) {
+			jump = 20;
+			speed = 5;
+		}
+
 		return new CharacterStats(id, speed, jump, health);
 	}
 
@@ -161,7 +177,7 @@ private JLabel leaderboardLabel;
 						new ImageIcon("img/cookieimg/cookie1/player_jumpend.png"),
 						new ImageIcon("img/cookieimg/cookie1/player_down.gif"),
 						new ImageIcon("img/cookieimg/cookie1/player_attack.png"));
-				characterStats = randomStats("ch1");
+				characterStats = statsForId("ch1");
 				updateStatsLabel("쿠키1", characterStats);
 			}
 		});
@@ -187,7 +203,7 @@ private JLabel leaderboardLabel;
 						new ImageIcon("img/cookieimg/cookie2/fall.png"),
 						new ImageIcon("img/cookieimg/cookie2/slide.gif"),
 						new ImageIcon("img/cookieimg/cookie2/hit.gif"));
-				characterStats = randomStats("ch2");
+				characterStats = statsForId("ch2");
 				updateStatsLabel("쿠키2", characterStats);
 			}
 		});
@@ -213,7 +229,7 @@ private JLabel leaderboardLabel;
 						new ImageIcon("img/cookieimg/cookie3/fall.png"),
 						new ImageIcon("img/cookieimg/cookie3/slide.gif"),
 						new ImageIcon("img/cookieimg/cookie3/hit.png"));
-				characterStats = randomStats("ch3");
+				characterStats = statsForId("ch3");
 				updateStatsLabel("쿠키3", characterStats);
 			}
 		});
@@ -239,7 +255,7 @@ private JLabel leaderboardLabel;
 						new ImageIcon("img/cookieimg/cookie4/kjump.gif"),
 						new ImageIcon("img/cookieimg/cookie4/kslide.gif"),
 						new ImageIcon("img/cookieimg/cookie4/kch.gif"));
-				characterStats = randomStats("ch4");
+				characterStats = statsForId("ch4");
 				updateStatsLabel("쿠키4", characterStats);
 			}
 		});

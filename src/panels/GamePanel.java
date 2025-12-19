@@ -44,6 +44,9 @@ import ingame.Tacle;
 import main.Main;
 import config.Settings;
 import util.Util;
+import net.GameState;
+import net.NetConfig;
+import net.UdpSync;
 
 public class GamePanel extends JPanel {
 
@@ -134,6 +137,12 @@ public class GamePanel extends JPanel {
 	private int maxHealth = 1000; // 최대 체력
 	private double fallVelocity = 0;
 	private double jumpVelocity = 0;
+	private double healthTickAcc = 0; // 시간 경과 체력 감소 누적
+	private boolean debugOverlay = false;
+	private boolean godMode = false;
+	private long debugFrameCount = 0;
+	private long debugLastFpsTime = 0;
+	private int debugFps = 0;
 
 	private int nowField = 2000; // 발판의 높이를 저장.
 
@@ -156,6 +165,13 @@ public class GamePanel extends JPanel {
 	private boolean magnetActive = false;
 	private boolean giantActive = false;
 	private boolean slowActive = false;
+
+	// 네트워크 동기화
+	private boolean netEnabled = true; // 2인 네트워크 기본 활성화
+	private NetConfig netConfig = new NetConfig();
+	private UdpSync udpSync;
+	private GameState remoteState;
+	private long lastRemoteTs = 0;
 
 	private Timer gameTimer; // 단일 게임 루프 타이머
 	private long lastTick = 0;
@@ -398,6 +414,14 @@ public class GamePanel extends JPanel {
 			g2.setComposite(alphaComposite);
 		}
 
+		// 원격 플레이어 상태가 있으면 간단히 표시
+		if (remoteState != null && Util.getTime() - lastRemoteTs < 2000) {
+			buffg.setColor(new Color(120, 200, 255, 160));
+			buffg.fillOval(remoteState.x - 20, remoteState.y - 40, 80, 80);
+			buffg.setColor(Color.WHITE);
+			buffg.drawString("PARTNER", remoteState.x - 10, remoteState.y - 50);
+		}
+
 		// 상단 HUD 배경을 그린다 (유리 느낌 그라디언트)
 		GradientPaint hudPaint = new GradientPaint(0, 0, new Color(15, 17, 26, 200), 0, 90,
 				new Color(25, 35, 55, 140));
@@ -442,6 +466,18 @@ public class GamePanel extends JPanel {
 		// 버프/디버프 상태를 그린다
 		drawBuffStatus(g2);
 
+		if (debugOverlay) {
+			g2.setColor(new Color(0, 0, 0, 160));
+			g2.fillRect(10, 100, 220, 90);
+			g2.setColor(Color.WHITE);
+			g2.setFont(new Font("Arial", Font.PLAIN, 12));
+			g2.drawString(String.format("FPS: %d", debugFps), 20, 120);
+			g2.drawString(String.format("Pos: (%d, %d)", c1.getX(), c1.getY()), 20, 135);
+			g2.drawString(String.format("Speed: %d", gameSpeed), 20, 150);
+			g2.drawString(String.format("HP: %d/%d", c1.getHealth(), maxHealth), 20, 165);
+			g2.drawString(String.format("GodMode: %s", godMode ? "ON" : "OFF"), 20, 180);
+		}
+
 		if (escKeyOn) { // esc키를 누를경우 화면을 흐리게 만든다
 
 			// alpha값을 반투명하게 만든다
@@ -468,6 +504,17 @@ public class GamePanel extends JPanel {
 		// 버퍼이미지를 화면에 출력한다
 		g.drawImage(buffImage, 0, 0, this);
 
+		// FPS 계산
+		debugFrameCount++;
+		long now = Util.getTime();
+		if (debugLastFpsTime == 0) {
+			debugLastFpsTime = now;
+		}
+		if (now - debugLastFpsTime >= 1000) {
+			debugFps = (int) debugFrameCount;
+			debugFrameCount = 0;
+			debugLastFpsTime = now;
+		}
 	}
 
 	// 맵 오브젝트 이미지들을 저장
@@ -762,13 +809,15 @@ public class GamePanel extends JPanel {
 				}
 
 				if (!escKeyOn) {
-					if (e.getKeyCode() == settings.getKeyJump()) {// 점프 키를 누르고 더블점프가 2가 아닐때
+					if (e.getKeyCode() == settings.getKeyJump() || e.getKeyCode() == KeyEvent.VK_W
+							|| e.getKeyCode() == KeyEvent.VK_SPACE) {// 점프 키를 누르고 더블점프가 2가 아닐때
 						jumpBtn = jumpButtonIconDown.getImage();
 						if (c1.getCountJump() < 2) {
 							jump(); // 점프 메서드 가동
 						}
 					}
-					if (e.getKeyCode() == settings.getKeySlide()) { // 다운키를 눌렀을 때
+					if (e.getKeyCode() == settings.getKeySlide() || e.getKeyCode() == KeyEvent.VK_S
+							|| e.getKeyCode() == KeyEvent.VK_DOWN) { // 다운키를 눌렀을 때
 						slideBtn = slideIconDown.getImage();
 						downKeyOn = true; // downKeyOn 변수를 true로
 
@@ -786,7 +835,8 @@ public class GamePanel extends JPanel {
 			@Override
 			public void keyReleased(KeyEvent e) {
 
-				if (e.getKeyCode() == KeyEvent.VK_DOWN) { // 다운키를 뗐을 때
+				if (e.getKeyCode() == KeyEvent.VK_DOWN || e.getKeyCode() == KeyEvent.VK_S
+						|| e.getKeyCode() == settings.getKeySlide()) { // 다운키를 뗐을 때
 					slideBtn = slideIconUp.getImage();
 					downKeyOn = false; // downKeyOn 변수를 false로
 
@@ -798,8 +848,17 @@ public class GamePanel extends JPanel {
 					}
 				}
 
-				if (e.getKeyCode() == settings.getKeyJump()) {
+				if (e.getKeyCode() == settings.getKeyJump() || e.getKeyCode() == KeyEvent.VK_W
+						|| e.getKeyCode() == KeyEvent.VK_SPACE) {
 					jumpBtn = jumpButtonIconUp.getImage();
+				}
+
+				if (e.getKeyCode() == KeyEvent.VK_F1) { // 디버그 오버레이 토글
+					debugOverlay = !debugOverlay;
+				}
+				if (e.getKeyCode() == KeyEvent.VK_F2) { // 무적 토글
+					godMode = !godMode;
+					c1.setInvincible(godMode);
 				}
 			}
 		});
@@ -817,10 +876,17 @@ public class GamePanel extends JPanel {
 			lastTick = now;
 			if (!escKeyOn) {
 				updateGame(dt);
+				sendNetState();
 			}
 			repaint();
 		});
 		gameTimer.start();
+
+		if (netEnabled) {
+			startNetReceive();
+			System.out.println("UDP sync enabled: local " + netConfig.localPort + " -> remote " + netConfig.remoteHost + ":"
+					+ netConfig.remotePort);
+		}
 	}
 
 	// 단일 루프에서 호출되는 업데이트
@@ -847,6 +913,16 @@ public class GamePanel extends JPanel {
 		runPage += gameSpeed; // 화면이 이동하면 runPage에 이동한 만큼 저장된다.
 		totalDistance += gameSpeed;
 		updateProgressDistance();
+
+		// 시간 경과에 따른 체력 감소 (1초마다 2 감소)
+		healthTickAcc += dt;
+		if (healthTickAcc >= 1.0) {
+			int ticks = (int) (healthTickAcc);
+			if (!godMode) {
+				c1.setHealth(c1.getHealth() - 2 * ticks);
+			}
+			healthTickAcc -= ticks;
+		}
 
 		foot = c1.getY() + c1.getHeight(); // 캐릭터 발 위치 재스캔
 		if (foot > 1999 || c1.getHealth() < 1) {
@@ -1253,6 +1329,31 @@ public class GamePanel extends JPanel {
 				playerState = PlayerState.RUN;
 			}
 		}
+	}
+
+	private void sendNetState() {
+		if (!netEnabled || udpSync == null) {
+			return;
+		}
+		GameState state = new GameState();
+		state.x = c1.getX();
+		state.y = c1.getY();
+		state.health = c1.getHealth();
+		state.score = resultScore;
+		state.imageIndex = 0; // 간단히 기본 인덱스
+		state.timestamp = Util.getTime();
+		udpSync.send(state);
+	}
+
+	private void startNetReceive() {
+		if (udpSync != null) {
+			udpSync.stop();
+		}
+		udpSync = new UdpSync(netConfig);
+		udpSync.start(gs -> {
+			remoteState = gs;
+			lastRemoteTs = gs.timestamp;
+		});
 	}
 
 	// 화면을 움직이고 젤리를 먹거나, 장애물에 부딛히는 등의 이벤트를 발생시키는 메서드
