@@ -6,6 +6,7 @@ import java.io.Serializable;
 public class GameState implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	public int seq;
 	public int x;
 	public int y;
 	public int health;

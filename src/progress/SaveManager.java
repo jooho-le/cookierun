@@ -9,6 +9,8 @@ import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import util.DebugLog;
+
 // 간단한 직렬화 기반 세이브/로드. 슬롯별 파일 저장.
 public class SaveManager {
 
@@ -46,9 +48,10 @@ public class SaveManager {
 			try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(slot))) {
 				oos.writeObject(data);
 				oos.flush();
+				DebugLog.add("Saved slot: " + slot.getName());
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			DebugLog.add("Save failed: " + e.getMessage());
 		}
 	}
 }

@@ -1,0 +1,12 @@
+{
+  "spawnBuff": 0.0025,
+  "spawnPlatform": 0.0018,
+  "spawnEnemy": 0.0015,
+  "healthDrainPerSec": 2,
+  "buffDuration.MAGNET": 8000,
+  "buffDuration.SHIELD": 9000,
+  "buffDuration.SPEED": 7000,
+  "buffDuration.GIANT": 6000,
+  "buffDuration.DOUBLE_SCORE": 8000,
+  "buffDuration.SLOW": 6000
+}

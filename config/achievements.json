@@ -1,0 +1,14 @@
+[
+  {
+    "id": "a1",
+    "title": "첫 점프",
+    "description": "점프 10번 하기",
+    "target": 10
+  },
+  {
+    "id": "a2",
+    "title": "수집가",
+    "description": "젤리 50개 먹기",
+    "target": 50
+  }
+]

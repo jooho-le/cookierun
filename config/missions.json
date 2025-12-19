@@ -1,0 +1,12 @@
+[
+  {
+    "id": "m1",
+    "description": "오늘 1000m 달리기",
+    "target": 1000
+  },
+  {
+    "id": "m2",
+    "description": "오늘 젤리 30개 먹기",
+    "target": 30
+  }
+]

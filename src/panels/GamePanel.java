@@ -24,8 +24,11 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
+import engine.Body;
+import engine.CollisionLayer;
 import engine.PhysicsUtil;
 import engine.PlayerState;
+import engine.GameState;
 import ingame.Back;
 import ingame.BuffItem;
 import ingame.BuffType;
@@ -43,8 +46,9 @@ import ingame.SpecialPlatform;
 import ingame.Tacle;
 import main.Main;
 import config.Settings;
+import config.GameConfig;
 import util.Util;
-import net.GameState;
+import util.DebugLog;
 import net.NetConfig;
 import net.UdpSync;
 
@@ -143,6 +147,7 @@ public class GamePanel extends JPanel {
 	private long debugFrameCount = 0;
 	private long debugLastFpsTime = 0;
 	private int debugFps = 0;
+	private boolean logOverlay = false;
 
 	private int nowField = 2000; // 발판의 높이를 저장.
 
@@ -170,8 +175,21 @@ public class GamePanel extends JPanel {
 	private boolean netEnabled = true; // 2인 네트워크 기본 활성화
 	private NetConfig netConfig = new NetConfig();
 	private UdpSync udpSync;
-	private GameState remoteState;
+	private net.GameState remoteState;
 	private long lastRemoteTs = 0;
+	private int sendSeq = 0;
+	private int remoteSeq = -1;
+	private double remoteLerpX = 0;
+	private double remoteLerpY = 0;
+	private double remoteLastDrawX = 0;
+	private double remoteLastDrawY = 0;
+
+	private final double fixedStep = 0.016;
+	private double accumulator = 0;
+	private GameConfig gameConfig = GameConfig.load();
+
+	private GameState gameState = GameState.LOADING;
+	private java.util.Stack<String> menuStack = new java.util.Stack<>();
 
 	private Timer gameTimer; // 단일 게임 루프 타이머
 	private long lastTick = 0;
@@ -416,10 +434,13 @@ public class GamePanel extends JPanel {
 
 		// 원격 플레이어 상태가 있으면 간단히 표시
 		if (remoteState != null && Util.getTime() - lastRemoteTs < 2000) {
+			double alpha = Math.min(1.0, (double) (Util.getTime() - lastRemoteTs) / 200.0);
+			remoteLastDrawX = remoteLastDrawX + (remoteLerpX - remoteLastDrawX) * alpha;
+			remoteLastDrawY = remoteLastDrawY + (remoteLerpY - remoteLastDrawY) * alpha;
 			buffg.setColor(new Color(120, 200, 255, 160));
-			buffg.fillOval(remoteState.x - 20, remoteState.y - 40, 80, 80);
+			buffg.fillOval((int) remoteLastDrawX - 20, (int) remoteLastDrawY - 40, 80, 80);
 			buffg.setColor(Color.WHITE);
-			buffg.drawString("PARTNER", remoteState.x - 10, remoteState.y - 50);
+			buffg.drawString("PARTNER", (int) remoteLastDrawX - 10, (int) remoteLastDrawY - 50);
 		}
 
 		// 상단 HUD 배경을 그린다 (유리 느낌 그라디언트)
@@ -478,6 +499,20 @@ public class GamePanel extends JPanel {
 			g2.drawString(String.format("GodMode: %s", godMode ? "ON" : "OFF"), 20, 180);
 		}
 
+		if (logOverlay) {
+			g2.setColor(new Color(0, 0, 0, 180));
+			g2.fillRect(this.getWidth() - 320, 20, 300, 200);
+			g2.setColor(Color.WHITE);
+			g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
+			int y = 36;
+			java.util.List<String> logs = DebugLog.snapshot();
+			for (int i = logs.size() - 1; i >= 0 && y < 210; i--) {
+				String line = logs.get(i);
+				g2.drawString(line.length() > 45 ? line.substring(0, 45) : line, this.getWidth() - 310, y);
+				y += 14;
+			}
+		}
+
 		if (escKeyOn) { // esc키를 누를경우 화면을 흐리게 만든다
 
 			// alpha값을 반투명하게 만든다
@@ -499,6 +534,16 @@ public class GamePanel extends JPanel {
 			buffg.setFont(new Font("Arial", Font.PLAIN, 15));
 			buffg.drawString("Esc: Resume    Start/End buttons: Mouse    Space: Jump    Down: Slide",
 					this.getWidth() / 2 - 235, this.getHeight() / 2 + 18);
+		}
+
+		if (gameState == GameState.PAUSED) {
+			buffg.setColor(new Color(0, 0, 0, 160));
+			buffg.fillRect(0, 0, this.getWidth(), this.getHeight());
+			buffg.setColor(Color.WHITE);
+			buffg.setFont(new Font("Arial", Font.BOLD, 32));
+			buffg.drawString("PAUSED", this.getWidth() / 2 - 80, this.getHeight() / 2 - 10);
+			buffg.setFont(new Font("Arial", Font.PLAIN, 15));
+			buffg.drawString("Press Esc to Resume", this.getWidth() / 2 - 90, this.getHeight() / 2 + 18);
 		}
 
 		// 버퍼이미지를 화면에 출력한다
@@ -797,18 +842,19 @@ public class GamePanel extends JPanel {
 			@Override
 			public void keyPressed(KeyEvent e) {
 
-				if (e.getKeyCode() == settings.getKeyPause()) { // esc키를 눌렀을 때
-					if (!escKeyOn) {
-						escKeyOn = true;
-						add(escButton);
-						repaint(); // 화면을 어둡게 하기위한 리페인트
+				if (e.getKeyCode() == settings.getKeyPause()) {
+					if (gameState == GameState.PAUSED) {
+						gameState = GameState.PLAYING;
+						if (!menuStack.isEmpty()) {
+							menuStack.pop();
+						}
 					} else {
-						remove(escButton);
-						escKeyOn = false;
+						gameState = GameState.PAUSED;
+						menuStack.push("Paused");
 					}
 				}
 
-				if (!escKeyOn) {
+				if (gameState == GameState.PLAYING) {
 					if (e.getKeyCode() == settings.getKeyJump() || e.getKeyCode() == KeyEvent.VK_W
 							|| e.getKeyCode() == KeyEvent.VK_SPACE) {// 점프 키를 누르고 더블점프가 2가 아닐때
 						jumpBtn = jumpButtonIconDown.getImage();
@@ -860,6 +906,9 @@ public class GamePanel extends JPanel {
 					godMode = !godMode;
 					c1.setInvincible(godMode);
 				}
+				if (e.getKeyCode() == KeyEvent.VK_F3) { // 로그 오버레이 토글
+					logOverlay = !logOverlay;
+				}
 			}
 		});
 	}
@@ -874,9 +923,13 @@ public class GamePanel extends JPanel {
 			long now = Util.getTime();
 			double dt = (now - lastTick) / 1000.0; // seconds
 			lastTick = now;
-			if (!escKeyOn) {
-				updateGame(dt);
-				sendNetState();
+			if (gameState == GameState.PLAYING) {
+				accumulator += dt;
+				while (accumulator >= fixedStep) {
+					updateGame(fixedStep);
+					sendNetState();
+					accumulator -= fixedStep;
+				}
 			}
 			repaint();
 		});
@@ -887,6 +940,8 @@ public class GamePanel extends JPanel {
 			System.out.println("UDP sync enabled: local " + netConfig.localPort + " -> remote " + netConfig.remoteHost + ":"
 					+ netConfig.remotePort);
 		}
+
+		gameState = GameState.PLAYING;
 	}
 
 	// 단일 루프에서 호출되는 업데이트
@@ -895,13 +950,16 @@ public class GamePanel extends JPanel {
 		refreshBuffFlags();
 		gameSpeed = calcGameSpeed();
 
-		if (Math.random() < 0.0025) {
+		Body playerBody = new Body(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight(), CollisionLayer.PLAYER,
+				CollisionLayer.ENEMY | CollisionLayer.PROJECTILE | CollisionLayer.ITEM | CollisionLayer.PLATFORM);
+
+		if (Math.random() < gameConfig.spawnBuff) {
 			spawnBuffItem();
 		}
-		if (Math.random() < 0.0018) {
+		if (Math.random() < gameConfig.spawnPlatform) {
 			spawnSpecialPlatform();
 		}
-		if (Math.random() < 0.0015) {
+		if (Math.random() < gameConfig.spawnEnemy) {
 			spawnEnemy();
 		}
 
@@ -914,12 +972,12 @@ public class GamePanel extends JPanel {
 		totalDistance += gameSpeed;
 		updateProgressDistance();
 
-		// 시간 경과에 따른 체력 감소 (1초마다 2 감소)
+		// 시간 경과에 따른 체력 감소
 		healthTickAcc += dt;
 		if (healthTickAcc >= 1.0) {
 			int ticks = (int) (healthTickAcc);
 			if (!godMode) {
-				c1.setHealth(c1.getHealth() - 2 * ticks);
+				c1.setHealth(c1.getHealth() - (int) (gameConfig.healthDrainPerSec * ticks));
 			}
 			healthTickAcc -= ticks;
 		}
@@ -932,7 +990,7 @@ public class GamePanel extends JPanel {
 			main.setGamePanel(new GamePanel(superFrame, cl, main, settings));
 			superFrame.requestFocus();
 			updateLeaderboardAndSave();
-			escKeyOn = true;
+			gameState = GameState.RESULT;
 			return;
 		}
 
@@ -1111,12 +1169,15 @@ public class GamePanel extends JPanel {
 
 			face = c1.getX() + c1.getWidth();
 			foot = c1.getY() + c1.getHeight();
-			if (item.getX() + item.getWidth() >= c1.getX() && item.getX() <= face
-					&& item.getY() + item.getHeight() >= c1.getY() && item.getY() <= foot) {
-				applyBuffFromItem(item.getType());
-				buffItemList.remove(item);
-			}
-		}
+					playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
+					Body itemBody = new Body(item.getX(), item.getY(), item.getWidth(), item.getHeight(), CollisionLayer.ITEM,
+							CollisionLayer.PLAYER);
+					if (playerBody.intersects(itemBody)) {
+						applyBuffFromItem(item.getType());
+						DebugLog.add("Buff picked: " + item.getType());
+						buffItemList.remove(item);
+					}
+				}
 
 		// 장애물 이동 및 충돌
 		for (int i = 0; i < tacleList.size(); i++) {
@@ -1128,19 +1189,11 @@ public class GamePanel extends JPanel {
 				face = c1.getX() + c1.getWidth();
 				foot = c1.getY() + c1.getHeight();
 
-				boolean collide =
-						!c1.isInvincible() && tempTacle.getX() + tempTacle.getWidth() / 2 >= c1.getX()
-						&& tempTacle.getX() + tempTacle.getWidth() / 2 <= face
-						&& tempTacle.getY() + tempTacle.getHeight() / 2 >= c1.getY()
-						&& tempTacle.getY() + tempTacle.getHeight() / 2 <= foot;
+				playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
+				Body tacleBody = new Body(tempTacle.getX(), tempTacle.getY(), tempTacle.getWidth(), tempTacle.getHeight(),
+						CollisionLayer.ENEMY, CollisionLayer.PLAYER);
 
-				boolean collideAir =
-						!c1.isInvincible() && tempTacle.getX() + tempTacle.getWidth() / 2 >= c1.getX()
-						&& tempTacle.getX() + tempTacle.getWidth() / 2 <= face
-						&& tempTacle.getY() < c1.getY()
-						&& tempTacle.getY() + tempTacle.getHeight() * 95 / 100 > c1.getY();
-
-				if (collide || collideAir) {
+				if (!c1.isInvincible() && playerBody.intersects(tacleBody)) {
 					if (giantActive) {
 						tacleList.remove(tempTacle);
 						resultScore += 200;
@@ -1149,6 +1202,7 @@ public class GamePanel extends JPanel {
 						buffEndTime.put(BuffType.SHIELD, 0L);
 					} else {
 						hit();
+						DebugLog.add("Hit by obstacle");
 					}
 				}
 			}
@@ -1205,8 +1259,11 @@ public class GamePanel extends JPanel {
 			}
 			enemy.setX(enemy.getX() - gameSpeed - 1);
 
-			if (!c1.isInvincible() && enemy.getX() < face && enemy.getX() + enemy.getWidth() > c1.getX()
-					&& enemy.getY() < foot && enemy.getY() + enemy.getHeight() > c1.getY()) {
+			playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
+			Body enemyBody = new Body(enemy.getX(), enemy.getY(), enemy.getWidth(), enemy.getHeight(), CollisionLayer.ENEMY,
+					CollisionLayer.PLAYER);
+
+			if (!c1.isInvincible() && playerBody.intersects(enemyBody)) {
 				if (giantActive) {
 					enemyList.remove(enemy);
 					resultScore += 200;
@@ -1216,6 +1273,7 @@ public class GamePanel extends JPanel {
 					enemyList.remove(enemy);
 				} else {
 					hit();
+					DebugLog.add("Hit by enemy");
 				}
 			}
 		}
@@ -1229,8 +1287,10 @@ public class GamePanel extends JPanel {
 				projectileList.remove(p);
 				continue;
 			}
-			if (!c1.isInvincible() && p.getX() < face && p.getX() + p.getWidth() > c1.getX() && p.getY() < foot
-					&& p.getY() + p.getHeight() > c1.getY()) {
+			playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
+			Body projBody = new Body(p.getX(), p.getY(), p.getWidth(), p.getHeight(), CollisionLayer.PROJECTILE,
+					CollisionLayer.PLAYER);
+			if (!c1.isInvincible() && playerBody.intersects(projBody)) {
 				if (shieldActive) {
 					shieldActive = false;
 					buffEndTime.put(BuffType.SHIELD, 0L);
@@ -1335,12 +1395,13 @@ public class GamePanel extends JPanel {
 		if (!netEnabled || udpSync == null) {
 			return;
 		}
-		GameState state = new GameState();
+		net.GameState state = new net.GameState();
+		state.seq = sendSeq++;
 		state.x = c1.getX();
 		state.y = c1.getY();
 		state.health = c1.getHealth();
 		state.score = resultScore;
-		state.imageIndex = 0; // 간단히 기본 인덱스
+		state.imageIndex = 0;
 		state.timestamp = Util.getTime();
 		udpSync.send(state);
 	}
@@ -1351,8 +1412,14 @@ public class GamePanel extends JPanel {
 		}
 		udpSync = new UdpSync(netConfig);
 		udpSync.start(gs -> {
+			if (gs.seq <= remoteSeq) {
+				return;
+			}
+			remoteSeq = gs.seq;
 			remoteState = gs;
 			lastRemoteTs = gs.timestamp;
+			remoteLerpX = gs.x;
+			remoteLerpY = gs.y;
 		});
 	}
 
@@ -2306,28 +2373,8 @@ public class GamePanel extends JPanel {
 	}
 
 	private void applyBuffFromItem(BuffType type) {
-		switch (type) {
-		case MAGNET:
-			activateBuff(type, 8000);
-			break;
-		case SHIELD:
-			activateBuff(type, 9000);
-			break;
-		case SPEED:
-			activateBuff(type, 7000);
-			break;
-		case GIANT:
-			activateBuff(type, 6000);
-			break;
-		case DOUBLE_SCORE:
-			activateBuff(type, 8000);
-			break;
-		case SLOW:
-			activateBuff(type, 6000);
-			break;
-		default:
-			break;
-		}
+		long dur = gameConfig.buffDuration.getOrDefault(type, 7000L);
+		activateBuff(type, dur);
 	}
 
 	// 업적/미션 진행 업데이트
