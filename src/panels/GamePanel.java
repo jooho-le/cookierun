@@ -148,6 +148,9 @@ public class GamePanel extends JPanel {
 	private long debugLastFpsTime = 0;
 	private int debugFps = 0;
 	private boolean logOverlay = false;
+	private String lastPickupText = "";
+	private long lastPickupTime = 0;
+	private static final long PICKUP_DISPLAY_MS = 1000;
 
 	private int nowField = 2000; // 발판의 높이를 저장.
 
@@ -511,6 +514,13 @@ public class GamePanel extends JPanel {
 				g2.drawString(line.length() > 45 ? line.substring(0, 45) : line, this.getWidth() - 310, y);
 				y += 14;
 			}
+		}
+
+		if (lastPickupText != null && !lastPickupText.isEmpty() && Util.getTime() - lastPickupTime < PICKUP_DISPLAY_MS) {
+			g2.setFont(new Font("Arial", Font.BOLD, 36));
+			g2.setColor(new Color(255, 220, 80, 220));
+			int strWidth = g2.getFontMetrics().stringWidth(lastPickupText);
+			g2.drawString(lastPickupText, this.getWidth() / 2 - strWidth / 2, 140);
 		}
 
 		if (escKeyOn) { // esc키를 누를경우 화면을 흐리게 만든다
@@ -1175,6 +1185,7 @@ public class GamePanel extends JPanel {
 					if (playerBody.intersects(itemBody)) {
 						applyBuffFromItem(item.getType());
 						DebugLog.add("Buff picked: " + item.getType());
+						showPickupMessage(buffLabel(item.getType()));
 						buffItemList.remove(item);
 					}
 				}
@@ -1331,15 +1342,18 @@ public class GamePanel extends JPanel {
 						if (sp.getType() == PlatformType.FALLING || sp.getType() == PlatformType.COLLAPSING) {
 							sp.setTriggered(true);
 							sp.setCollapseStart(Util.getTime());
+							showPickupMessage(platformLabel(sp.getType()));
 						}
 					}
 					if (sp.getType() == PlatformType.JUMPPAD) {
 						c1.setY(c1.getY() - 15);
 						c1.setJump(true);
 						c1.setCountJump(1);
+						showPickupMessage(platformLabel(sp.getType()));
 					} else if (sp.getType() == PlatformType.RAIL) {
 						downKeyOn = true;
 						c1.setImage(slideIc.getImage());
+						showPickupMessage(platformLabel(sp.getType()));
 					}
 				}
 			}
@@ -1421,6 +1435,49 @@ public class GamePanel extends JPanel {
 			remoteLerpX = gs.x;
 			remoteLerpY = gs.y;
 		});
+	}
+
+	private void showPickupMessage(String msg) {
+		lastPickupText = msg;
+		lastPickupTime = Util.getTime();
+	}
+
+	private String buffLabel(BuffType type) {
+		switch (type) {
+		case MAGNET:
+			return "자석!";
+		case SHIELD:
+			return "실드!";
+		case SPEED:
+			return "속도 업!";
+		case GIANT:
+			return "거대화!";
+		case DOUBLE_SCORE:
+			return "점수 x2!";
+		case SLOW:
+			return "슬로우!";
+		case REVERSE_GRAVITY:
+			return "역중력!";
+		default:
+			return "버프!";
+		}
+	}
+
+	private String platformLabel(PlatformType type) {
+		switch (type) {
+		case MOVING:
+			return "이동 발판!";
+		case FALLING:
+			return "낙하 발판!";
+		case COLLAPSING:
+			return "붕괴 발판!";
+		case JUMPPAD:
+			return "점프 패드!";
+		case RAIL:
+			return "레일!";
+		default:
+			return "발판!";
+		}
 	}
 
 	// 화면을 움직이고 젤리를 먹거나, 장애물에 부딛히는 등의 이벤트를 발생시키는 메서드
