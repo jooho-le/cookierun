@@ -148,12 +148,12 @@ public class GamePanel extends JPanel {
 	private long debugFrameCount = 0;
 	private long debugLastFpsTime = 0;
 	private int debugFps = 0;
-	private boolean logOverlay = false;
-	private String lastPickupText = "";
-	private long lastPickupTime = 0;
-	private static final long PICKUP_DISPLAY_MS = 1000;
-	// 배경음 제거
-	// private SoundManager.BgmPlayer bgmPlayer = new SoundManager.BgmPlayer();
+private boolean logOverlay = false;
+private String lastPickupText = "";
+private long lastPickupTime = 0;
+private static final long PICKUP_DISPLAY_MS = 1000;
+// 배경음 제거
+// private SoundManager.BgmPlayer bgmPlayer = new SoundManager.BgmPlayer();
 
 	private int nowField = 2000; // 발판의 높이를 저장.
 
@@ -190,12 +190,61 @@ public class GamePanel extends JPanel {
 	private double remoteLastDrawX = 0;
 	private double remoteLastDrawY = 0;
 
-	private final double fixedStep = 0.016;
-	private double accumulator = 0;
-	private GameConfig gameConfig = GameConfig.load();
+private final double fixedStep = 0.016;
+private double accumulator = 0;
+private GameConfig gameConfig = GameConfig.load();
 
-	private GameState gameState = GameState.LOADING;
-	private java.util.Stack<String> menuStack = new java.util.Stack<>();
+private GameState gameState = GameState.LOADING;
+private java.util.Stack<String> menuStack = new java.util.Stack<>();
+
+// 재사용 바디(충돌) 객체로 GC 감소
+private final Body playerBody = new Body(0, 0, 0, 0, CollisionLayer.PLAYER,
+		CollisionLayer.ENEMY | CollisionLayer.PROJECTILE | CollisionLayer.ITEM | CollisionLayer.PLATFORM);
+private final Body itemBody = new Body(0, 0, 0, 0, CollisionLayer.ITEM, CollisionLayer.PLAYER);
+private final Body tacleBody = new Body(0, 0, 0, 0, CollisionLayer.ENEMY, CollisionLayer.PLAYER);
+private final Body enemyBody = new Body(0, 0, 0, 0, CollisionLayer.ENEMY, CollisionLayer.PLAYER);
+private final Body projBody = new Body(0, 0, 0, 0, CollisionLayer.PROJECTILE, CollisionLayer.PLAYER);
+
+// 자주 쓰는 폰트 캐시
+private final Font fontHUDSmall = new Font("Arial", Font.BOLD, 14);
+private final Font fontHUDBig = new Font("Arial", Font.BOLD, 36);
+private final Font fontHUDNormal = new Font("Arial", Font.PLAIN, 13);
+private final Font fontHUDDebug = new Font("Arial", Font.PLAIN, 12);
+private final Font fontBold12 = new Font("Arial", Font.BOLD, 12);
+private final Font fontBold32 = new Font("Arial", Font.BOLD, 32);
+private final Font fontPlain12 = new Font("Arial", Font.PLAIN, 12);
+private final Font fontPlain15 = new Font("Arial", Font.PLAIN, 15);
+private final Font fontLog = new Font("Monospaced", Font.PLAIN, 11);
+
+// 자주 쓰는 색상 캐시
+private static final Color COLOR_WHITE_200 = new Color(255, 255, 255, 200);
+private static final Color COLOR_WHITE_180 = new Color(255, 255, 255, 180);
+private static final Color COLOR_WHITE_220 = new Color(255, 255, 255, 220);
+private static final Color COLOR_WHITE_60 = new Color(255, 255, 255, 60);
+private static final Color COLOR_BLACK_160 = new Color(0, 0, 0, 160);
+private static final Color COLOR_BLACK_180 = new Color(0, 0, 0, 180);
+private static final Color COLOR_BLACK_130 = new Color(0, 0, 0, 130);
+private static final Color COLOR_BLACK_140 = new Color(0, 0, 0, 140);
+private static final Color COLOR_ENEMY_HORZ = new Color(255, 80, 80);
+private static final Color COLOR_ENEMY_SHOOTER = new Color(255, 200, 80);
+private static final Color COLOR_ENEMY_BASE = new Color(255, 90, 90, 230);
+private static final Color COLOR_ENEMY_VERT = new Color(90, 200, 255, 230);
+private static final Color COLOR_ENEMY_FAST = new Color(255, 150, 90, 230);
+private static final Color COLOR_ENEMY_TANK = new Color(120, 255, 140, 230);
+private static final Color COLOR_ENEMY_PHASE = new Color(190, 120, 255, 230);
+private static final Color COLOR_BUFF_MAGNET = new Color(0, 170, 255, 200);
+private static final Color COLOR_BUFF_SHIELD = new Color(0, 220, 150, 200);
+private static final Color COLOR_BUFF_SPEED = new Color(255, 140, 0, 200);
+private static final Color COLOR_BUFF_GIANT = new Color(255, 80, 0, 200);
+private static final Color COLOR_BUFF_DOUBLE = new Color(255, 215, 0, 200);
+private static final Color COLOR_BUFF_SLOW = new Color(160, 120, 255, 200);
+private static final Color COLOR_BUFF_REVERSE = new Color(120, 120, 255, 200);
+private static final Color COLOR_STAMINA_BG = new Color(200, 200, 200, 220);
+private static final Color COLOR_STAMINA_MAG = new Color(90, 200, 255, 230);
+private static final Color COLOR_STAMINA_SPEED = new Color(255, 150, 90, 230);
+private static final Color COLOR_STAMINA_DAMAGE = COLOR_ENEMY_BASE;
+private static final Color COLOR_STAMINA_HEAL = new Color(120, 255, 140, 230);
+private static final Color COLOR_STAMINA_BUFF = new Color(190, 120, 255, 230);
 
 	private Timer gameTimer; // 단일 게임 루프 타이머
 	private long lastTick = 0;
@@ -367,9 +416,9 @@ public class GamePanel extends JPanel {
 			SpecialPlatform sp = specialPlatforms.get(i);
 			buffg.setColor(sp.getColor());
 			buffg.fillRoundRect(sp.getX(), sp.getY(), sp.getWidth(), sp.getHeight(), 12, 12);
-			buffg.setColor(new Color(255, 255, 255, 200));
+			buffg.setColor(COLOR_WHITE_200);
 			buffg.drawRoundRect(sp.getX(), sp.getY(), sp.getWidth(), sp.getHeight(), 12, 12);
-			buffg.setFont(new Font("Arial", Font.BOLD, 12));
+			buffg.setFont(fontBold12);
 			buffg.drawString(shortPlatformLabel(sp.getType()), sp.getX() + 6, sp.getY() + sp.getHeight() - 6);
 		}
 
@@ -378,18 +427,18 @@ public class GamePanel extends JPanel {
 			Enemy enemy = enemyList.get(i);
 			Color c = Color.RED;
 			if (enemy.getType() == EnemyType.VERTICAL) {
-				c = new Color(255, 80, 80);
+				c = COLOR_ENEMY_HORZ;
 			} else if (enemy.getType() == EnemyType.SHOOTER) {
-				c = new Color(255, 200, 80);
+				c = COLOR_ENEMY_SHOOTER;
 			}
 			buffg.setColor(c);
 			buffg.fillOval(enemy.getX(), enemy.getY(), enemy.getWidth(), enemy.getHeight());
-			buffg.setColor(new Color(0, 0, 0, 160));
+			buffg.setColor(COLOR_BLACK_160);
 			buffg.drawOval(enemy.getX(), enemy.getY(), enemy.getWidth(), enemy.getHeight());
 		}
 
 		// 투사체를 그린다
-		buffg.setColor(new Color(255, 255, 255, 220));
+		buffg.setColor(COLOR_WHITE_220);
 		for (int i = 0; i < projectileList.size(); i++) {
 			Projectile p = projectileList.get(i);
 			buffg.fillOval(p.getX(), p.getY(), p.getWidth(), p.getHeight());
@@ -401,8 +450,8 @@ public class GamePanel extends JPanel {
 			Color itemColor = getBuffColor(item.getType());
 			buffg.setColor(itemColor);
 			buffg.fillOval(item.getX(), item.getY(), item.getWidth(), item.getHeight());
-			buffg.setColor(new Color(255, 255, 255, 180));
-			buffg.setFont(new Font("Arial", Font.BOLD, 12));
+			buffg.setColor(COLOR_WHITE_180);
+			buffg.setFont(fontBold12);
 			buffg.drawString(shortBuffLabel(item.getType()), item.getX() + 6, item.getY() + item.getHeight() / 2 + 4);
 		}
 
@@ -443,7 +492,7 @@ public class GamePanel extends JPanel {
 			double alpha = Math.min(1.0, (double) (Util.getTime() - lastRemoteTs) / 200.0);
 			remoteLastDrawX = remoteLastDrawX + (remoteLerpX - remoteLastDrawX) * alpha;
 			remoteLastDrawY = remoteLastDrawY + (remoteLerpY - remoteLastDrawY) * alpha;
-			buffg.setColor(new Color(120, 200, 255, 160));
+		buffg.setColor(COLOR_STAMINA_MAG);
 			buffg.fillOval((int) remoteLastDrawX - 20, (int) remoteLastDrawY - 40, 80, 80);
 			buffg.setColor(Color.WHITE);
 			buffg.drawString("PARTNER", (int) remoteLastDrawX - 10, (int) remoteLastDrawY - 50);
@@ -455,7 +504,7 @@ public class GamePanel extends JPanel {
 		g2.setPaint(hudPaint);
 		g2.fill(new RoundRectangle2D.Double(6, 6, this.getWidth() - 12, 78, 12, 12));
 		g2.setPaint(null);
-		g2.setColor(new Color(255, 255, 255, 60));
+		g2.setColor(COLOR_WHITE_60);
 		g2.setStroke(new BasicStroke(2f));
 		g2.draw(new RoundRectangle2D.Double(6, 6, this.getWidth() - 12, 78, 12, 12));
 
@@ -469,12 +518,12 @@ public class GamePanel extends JPanel {
 				1 + 470 - (int) (470 * ((double) c1.getHealth() / maxHealth)), 21);
 
 		// 체력 수치를 텍스트로 표시한다
-		buffg.setFont(new Font("Arial", Font.BOLD, 14));
+		buffg.setFont(fontHUDSmall);
 		buffg.setColor(Color.WHITE);
 		buffg.drawString(String.format("HP: %d / %d", c1.getHealth(), maxHealth), 24, 25);
 
 		// 진행 정보(스테이지/거리/속도)를 표시한다
-		buffg.setFont(new Font("Arial", Font.BOLD, 14));
+		buffg.setFont(fontHUDSmall);
 		buffg.drawString(String.format("STAGE: %s", getStageLabel()), 540, 25);
 		buffg.drawString(String.format("DIST: %dm", getDistanceMeters()), 540, 45);
 		buffg.drawString(String.format("SPEED: %d", gameSpeed), 540, 65);
@@ -484,20 +533,20 @@ public class GamePanel extends JPanel {
 		buffg.drawImage(slideBtn, 650, 360, 132, 100, null);
 
 		// 하단 컨트롤 힌트를 그린다
-		g2.setColor(new Color(0, 0, 0, 130));
+		g2.setColor(COLOR_BLACK_130);
 		g2.fill(new RoundRectangle2D.Double(150, this.getHeight() - 48, 500, 36, 14, 14));
-		g2.setColor(new Color(255, 255, 255, 200));
-		g2.setFont(new Font("Arial", Font.PLAIN, 13));
+		g2.setColor(COLOR_WHITE_200);
+		g2.setFont(fontHUDNormal);
 		g2.drawString("Space: Jump / Double Jump    Down: Slide    Esc: Pause", 165, this.getHeight() - 25);
 
 		// 버프/디버프 상태를 그린다
 		drawBuffStatus(g2);
 
 		if (debugOverlay) {
-			g2.setColor(new Color(0, 0, 0, 160));
+			g2.setColor(COLOR_BLACK_160);
 			g2.fillRect(10, 100, 220, 90);
 			g2.setColor(Color.WHITE);
-			g2.setFont(new Font("Arial", Font.PLAIN, 12));
+			g2.setFont(fontHUDDebug);
 			g2.drawString(String.format("FPS: %d", debugFps), 20, 120);
 			g2.drawString(String.format("Pos: (%d, %d)", c1.getX(), c1.getY()), 20, 135);
 			g2.drawString(String.format("Speed: %d", gameSpeed), 20, 150);
@@ -506,10 +555,10 @@ public class GamePanel extends JPanel {
 		}
 
 		if (logOverlay) {
-			g2.setColor(new Color(0, 0, 0, 180));
+			g2.setColor(COLOR_BLACK_180);
 			g2.fillRect(this.getWidth() - 320, 20, 300, 200);
 			g2.setColor(Color.WHITE);
-			g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
+			g2.setFont(fontLog);
 			int y = 36;
 			java.util.List<String> logs = DebugLog.snapshot();
 			for (int i = logs.size() - 1; i >= 0 && y < 210; i--) {
@@ -520,7 +569,7 @@ public class GamePanel extends JPanel {
 		}
 
 		if (lastPickupText != null && !lastPickupText.isEmpty() && Util.getTime() - lastPickupTime < PICKUP_DISPLAY_MS) {
-			g2.setFont(new Font("Arial", Font.BOLD, 36));
+			g2.setFont(fontHUDBig);
 			g2.setColor(Color.BLACK);
 			int strWidth = g2.getFontMetrics().stringWidth(lastPickupText);
 			g2.drawString(lastPickupText, this.getWidth() / 2 - strWidth / 2, 140);
@@ -542,20 +591,20 @@ public class GamePanel extends JPanel {
 
 			// 일시정지 안내 텍스트
 			buffg.setColor(Color.WHITE);
-			buffg.setFont(new Font("Arial", Font.BOLD, 32));
+			buffg.setFont(fontBold32);
 			buffg.drawString("PAUSED", this.getWidth() / 2 - 80, this.getHeight() / 2 - 10);
-			buffg.setFont(new Font("Arial", Font.PLAIN, 15));
+			buffg.setFont(fontPlain15);
 			buffg.drawString("Esc: Resume    Start/End buttons: Mouse    Space: Jump    Down: Slide",
 					this.getWidth() / 2 - 235, this.getHeight() / 2 + 18);
 		}
 
 		if (gameState == GameState.PAUSED) {
-			buffg.setColor(new Color(0, 0, 0, 160));
+			buffg.setColor(COLOR_BLACK_160);
 			buffg.fillRect(0, 0, this.getWidth(), this.getHeight());
 			buffg.setColor(Color.WHITE);
-			buffg.setFont(new Font("Arial", Font.BOLD, 32));
+			buffg.setFont(fontHUDBig.deriveFont(Font.BOLD, 32));
 			buffg.drawString("PAUSED", this.getWidth() / 2 - 80, this.getHeight() / 2 - 10);
-			buffg.setFont(new Font("Arial", Font.PLAIN, 15));
+			buffg.setFont(fontHUDNormal.deriveFont(Font.PLAIN, 15));
 			buffg.drawString("Press Esc to Resume", this.getWidth() / 2 - 90, this.getHeight() / 2 + 18);
 		}
 
@@ -965,8 +1014,7 @@ public class GamePanel extends JPanel {
 		refreshBuffFlags();
 		gameSpeed = calcGameSpeed();
 
-		Body playerBody = new Body(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight(), CollisionLayer.PLAYER,
-				CollisionLayer.ENEMY | CollisionLayer.PROJECTILE | CollisionLayer.ITEM | CollisionLayer.PLATFORM);
+		playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
 
 		if (Math.random() < gameConfig.spawnBuff) {
 			spawnBuffItem();
@@ -1186,16 +1234,15 @@ public class GamePanel extends JPanel {
 
 			face = c1.getX() + c1.getWidth();
 			foot = c1.getY() + c1.getHeight();
-					playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
-					Body itemBody = new Body(item.getX(), item.getY(), item.getWidth(), item.getHeight(), CollisionLayer.ITEM,
-							CollisionLayer.PLAYER);
-					if (playerBody.intersects(itemBody)) {
-						applyBuffFromItem(item.getType());
-						DebugLog.add("Buff picked: " + item.getType());
-						showPickupMessage(buffLabel(item.getType()));
-						buffItemList.remove(item);
-					}
-				}
+			playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
+			itemBody.set(item.getX(), item.getY(), item.getWidth(), item.getHeight());
+			if (playerBody.intersects(itemBody)) {
+				applyBuffFromItem(item.getType());
+				DebugLog.add("Buff picked: " + item.getType());
+				showPickupMessage(buffLabel(item.getType()));
+				buffItemList.remove(item);
+			}
+		}
 
 		// 장애물 이동 및 충돌
 		for (int i = 0; i < tacleList.size(); i++) {
@@ -1208,9 +1255,7 @@ public class GamePanel extends JPanel {
 				foot = c1.getY() + c1.getHeight();
 
 				playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
-				Body tacleBody = new Body(tempTacle.getX(), tempTacle.getY(), tempTacle.getWidth(), tempTacle.getHeight(),
-						CollisionLayer.ENEMY, CollisionLayer.PLAYER);
-
+				tacleBody.set(tempTacle.getX(), tempTacle.getY(), tempTacle.getWidth(), tempTacle.getHeight());
 				if (!c1.isInvincible() && playerBody.intersects(tacleBody)) {
 					if (giantActive) {
 						tacleList.remove(tempTacle);
@@ -1278,8 +1323,7 @@ public class GamePanel extends JPanel {
 			enemy.setX(enemy.getX() - gameSpeed - 1);
 
 			playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
-			Body enemyBody = new Body(enemy.getX(), enemy.getY(), enemy.getWidth(), enemy.getHeight(), CollisionLayer.ENEMY,
-					CollisionLayer.PLAYER);
+			enemyBody.set(enemy.getX(), enemy.getY(), enemy.getWidth(), enemy.getHeight());
 
 			if (!c1.isInvincible() && playerBody.intersects(enemyBody)) {
 				if (giantActive) {
@@ -1306,8 +1350,7 @@ public class GamePanel extends JPanel {
 				continue;
 			}
 			playerBody.set(c1.getX(), c1.getY(), c1.getWidth(), c1.getHeight());
-			Body projBody = new Body(p.getX(), p.getY(), p.getWidth(), p.getHeight(), CollisionLayer.PROJECTILE,
-					CollisionLayer.PLAYER);
+			projBody.set(p.getX(), p.getY(), p.getWidth(), p.getHeight());
 			if (!c1.isInvincible() && playerBody.intersects(projBody)) {
 				if (shieldActive) {
 					shieldActive = false;
@@ -2292,14 +2335,14 @@ public class GamePanel extends JPanel {
 				float ratio = Math.min(1f, Math.max(0f, remaining / (float) duration));
 				int y = startY + idx * (barHeight + 6);
 
-				g2.setColor(new Color(0, 0, 0, 140));
+				g2.setColor(COLOR_BLACK_140);
 				g2.fill(new RoundRectangle2D.Double(startX, y, barWidth, barHeight, 10, 10));
 
 				g2.setColor(getBuffColor(type));
 				g2.fill(new RoundRectangle2D.Double(startX, y, (int) (barWidth * ratio), barHeight, 10, 10));
 
 				g2.setColor(Color.WHITE);
-				g2.setFont(new Font("Arial", Font.BOLD, 12));
+				g2.setFont(fontBold12);
 				g2.drawString(shortBuffLabel(type) + " " + (remaining / 1000) + "s", startX + 8, y + 12);
 
 				idx++;
@@ -2311,21 +2354,21 @@ public class GamePanel extends JPanel {
 	private Color getBuffColor(BuffType type) {
 		switch (type) {
 		case MAGNET:
-			return new Color(0, 170, 255, 200);
+			return COLOR_BUFF_MAGNET;
 		case SHIELD:
-			return new Color(0, 220, 150, 200);
+			return COLOR_BUFF_SHIELD;
 		case SPEED:
-			return new Color(255, 140, 0, 200);
+			return COLOR_BUFF_SPEED;
 		case GIANT:
-			return new Color(255, 80, 0, 200);
+			return COLOR_BUFF_GIANT;
 		case DOUBLE_SCORE:
-			return new Color(255, 215, 0, 200);
+			return COLOR_BUFF_DOUBLE;
 		case SLOW:
-			return new Color(160, 120, 255, 200);
+			return COLOR_BUFF_SLOW;
 		case REVERSE_GRAVITY:
-			return new Color(120, 120, 255, 200);
+			return COLOR_BUFF_REVERSE;
 		default:
-			return new Color(255, 255, 255, 200);
+			return COLOR_WHITE_200;
 		}
 	}
 
@@ -2540,18 +2583,18 @@ public class GamePanel extends JPanel {
 		}
 		int vx = 0;
 		int vy = 0;
-		Color c = new Color(200, 200, 200, 220);
+		Color c = COLOR_STAMINA_BG;
 		if (type == PlatformType.MOVING) {
 			vy = (Math.random() < 0.5) ? 1 : -1;
-			c = new Color(90, 200, 255, 230);
+			c = COLOR_STAMINA_MAG;
 		} else if (type == PlatformType.FALLING) {
-			c = new Color(255, 150, 90, 230);
+			c = COLOR_STAMINA_SPEED;
 		} else if (type == PlatformType.COLLAPSING) {
-			c = new Color(255, 90, 90, 230);
+			c = COLOR_ENEMY_BASE;
 		} else if (type == PlatformType.JUMPPAD) {
-			c = new Color(120, 255, 140, 230);
+			c = COLOR_STAMINA_HEAL;
 		} else if (type == PlatformType.RAIL) {
-			c = new Color(190, 120, 255, 230);
+			c = COLOR_STAMINA_BUFF;
 		}
 		specialPlatforms.add(new SpecialPlatform(x, y, w, h, type, vx, vy, c));
 	}
