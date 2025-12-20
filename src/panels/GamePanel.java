@@ -49,6 +49,7 @@ import config.Settings;
 import config.GameConfig;
 import util.Util;
 import util.DebugLog;
+import util.SoundManager;
 import net.NetConfig;
 import net.UdpSync;
 
@@ -151,6 +152,8 @@ public class GamePanel extends JPanel {
 	private String lastPickupText = "";
 	private long lastPickupTime = 0;
 	private static final long PICKUP_DISPLAY_MS = 1000;
+	// 배경음 제거
+	// private SoundManager.BgmPlayer bgmPlayer = new SoundManager.BgmPlayer();
 
 	private int nowField = 2000; // 발판의 높이를 저장.
 
@@ -952,6 +955,8 @@ public class GamePanel extends JPanel {
 		}
 
 		gameState = GameState.PLAYING;
+		int bgmVol = Math.max(3, settings.getBgmVolume() / 4); // 기존의 1/4로 줄임, 최소 3%
+		// bgmPlayer.playLoop("sound/background.wav", bgmVol);
 	}
 
 	// 단일 루프에서 호출되는 업데이트
@@ -1001,6 +1006,8 @@ public class GamePanel extends JPanel {
 			superFrame.requestFocus();
 			updateLeaderboardAndSave();
 			gameState = GameState.RESULT;
+			// if (bgmPlayer != null) bgmPlayer.stop();
+			SoundManager.playEffect("sound/gameover.wav", settings.getSfxVolume());
 			return;
 		}
 
@@ -2051,6 +2058,8 @@ public class GamePanel extends JPanel {
 
 				System.out.println("피격무적시작");
 
+				SoundManager.playEffect("sound/dameg.wav", settings.getSfxVolume());
+
 				redScreen = true; // 피격 붉은 이펙트 시작
 
 				c1.setHealth(c1.getHealth() - 100); // 쿠키의 체력을 100 깎는다
@@ -2432,6 +2441,28 @@ public class GamePanel extends JPanel {
 	private void applyBuffFromItem(BuffType type) {
 		long dur = gameConfig.buffDuration.getOrDefault(type, 7000L);
 		activateBuff(type, dur);
+		switch (type) {
+		case MAGNET:
+			SoundManager.playEffect("sound/magnet.wav", settings.getSfxVolume());
+			break;
+		case SHIELD:
+			SoundManager.playEffect("sound/shield.wav", settings.getSfxVolume());
+			break;
+		case SPEED:
+			SoundManager.playEffect("sound/speedup.wav", settings.getSfxVolume());
+			break;
+		case GIANT:
+			SoundManager.playEffect("sound/max.wav", settings.getSfxVolume());
+			break;
+		case DOUBLE_SCORE:
+			SoundManager.playEffect("sound/speedup.wav", settings.getSfxVolume());
+			break;
+		case SLOW:
+			SoundManager.playEffect("sound/slow.wav", settings.getSfxVolume());
+			break;
+		default:
+			break;
+		}
 	}
 
 	// 업적/미션 진행 업데이트
