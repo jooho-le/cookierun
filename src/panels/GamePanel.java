@@ -518,7 +518,7 @@ public class GamePanel extends JPanel {
 
 		if (lastPickupText != null && !lastPickupText.isEmpty() && Util.getTime() - lastPickupTime < PICKUP_DISPLAY_MS) {
 			g2.setFont(new Font("Arial", Font.BOLD, 36));
-			g2.setColor(new Color(255, 220, 80, 220));
+			g2.setColor(Color.BLACK);
 			int strWidth = g2.getFontMetrics().stringWidth(lastPickupText);
 			g2.drawString(lastPickupText, this.getWidth() / 2 - strWidth / 2, 140);
 		}
